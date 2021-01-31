@@ -80,9 +80,10 @@ var InstallationTimeout = 20 * time.Minute
 var MaxHostDisconnectionTime = 3 * time.Minute
 
 type Config struct {
-	EnableAutoReset  bool          `envconfig:"ENABLE_AUTO_RESET" default:"false"`
-	ResetTimeout     time.Duration `envconfig:"RESET_CLUSTER_TIMEOUT" default:"3m"`
-	MonitorBatchSize int           `envconfig:"HOST_MONITOR_BATCH_SIZE" default:"100"`
+	EnableAutoReset      bool          `envconfig:"ENABLE_AUTO_RESET" default:"false"`
+	ResetTimeout         time.Duration `envconfig:"RESET_CLUSTER_TIMEOUT" default:"3m"`
+	LogCollectionTimeout time.Duration `envconfig:"LOG_COLLECTION_TIMEOUT" default:"10m"`
+	MonitorBatchSize     int           `envconfig:"HOST_MONITOR_BATCH_SIZE" default:"100"`
 }
 
 //go:generate mockgen -package=host -aux_files=github.com/openshift/assisted-service/internal/host/hostcommands=instruction_manager.go -destination=mock_host_api.go . API
@@ -147,6 +148,7 @@ func NewManager(log logrus.FieldLogger, db *gorm.DB, eventsHandler events.Handle
 		db:            db,
 		log:           log,
 		eventsHandler: eventsHandler,
+		config:        config,
 	}
 	return &Manager{
 		log:            log,
@@ -410,7 +412,7 @@ func (m *Manager) UpdateInstallProgress(ctx context.Context, h *models.Host, pro
 		}
 
 		_, err = hostutil.UpdateHostStatus(ctx, logutil.FromContext(ctx, m.log), m.db, m.eventsHandler, h.ClusterID, *h.ID,
-			swag.StringValue(h.Status), models.HostStatusError, statusInfo)
+			swag.StringValue(h.Status), models.HostStatusErrorPendingCollectingLogs, statusInfo)
 	case models.HostStageRebooting:
 		if swag.StringValue(h.Kind) == models.HostKindAddToExistingClusterHost {
 			_, err = hostutil.UpdateHostProgress(ctx, logutil.FromContext(ctx, m.log), m.db, m.eventsHandler, h.ClusterID, *h.ID,

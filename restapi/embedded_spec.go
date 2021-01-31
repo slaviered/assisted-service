@@ -4500,7 +4500,8 @@ func init() {
             "installed",
             "adding-hosts",
             "cancelled",
-            "installing-pending-user-action"
+            "installing-pending-user-action",
+            "error-pending-collecting-logs"
           ]
         },
         "status_info": {
@@ -5556,7 +5557,8 @@ func init() {
             "error",
             "resetting",
             "added-to-existing-cluster",
-            "cancelled"
+            "cancelled",
+            "error-pending-collecting-logs"
           ]
         },
         "status_info": {
@@ -11061,7 +11063,8 @@ func init() {
             "installed",
             "adding-hosts",
             "cancelled",
-            "installing-pending-user-action"
+            "installing-pending-user-action",
+            "error-pending-collecting-logs"
           ]
         },
         "status_info": {
@@ -12077,7 +12080,8 @@ func init() {
             "error",
             "resetting",
             "added-to-existing-cluster",
-            "cancelled"
+            "cancelled",
+            "error-pending-collecting-logs"
           ]
         },
         "status_info": {

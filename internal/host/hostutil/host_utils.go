@@ -50,6 +50,8 @@ func GetEventSeverityFromHostStatus(status string) string {
 		return models.EventSeverityWarning
 	case models.HostStatusError:
 		return models.EventSeverityError
+	case models.HostStatusErrorPendingCollectingLogs:
+		return models.EventSeverityError
 	default:
 		return models.EventSeverityInfo
 	}

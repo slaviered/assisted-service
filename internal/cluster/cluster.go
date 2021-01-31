@@ -100,7 +100,8 @@ type API interface {
 }
 
 type PrepareConfig struct {
-	InstallationTimeout time.Duration `envconfig:"PREPARE_FOR_INSTALLATION_TIMEOUT" default:"10m"`
+	InstallationTimeout  time.Duration `envconfig:"PREPARE_FOR_INSTALLATION_TIMEOUT" default:"10m"`
+	LogCollectionTimeout time.Duration `envconfig:"LOG_COLLECTION_TIMEOUT" default:"10m"`
 }
 
 type Config struct {

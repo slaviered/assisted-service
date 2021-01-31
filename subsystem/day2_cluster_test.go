@@ -455,7 +455,7 @@ var _ = Describe("Day2 cluster tests", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		h = getHost(clusterID, *host.ID)
-		Expect(*h.Status).Should(Equal("error"))
+		Expect(*h.Status).Should(Equal(models.ClusterStatusErrorPendingCollectingLogs))
 		_, err = userBMClient.Installer.ResetHost(ctx, &installer.ResetHostParams{ClusterID: clusterID, HostID: *host.ID})
 		Expect(err).NotTo(HaveOccurred())
 		h = getHost(clusterID, *host.ID)

@@ -54,6 +54,8 @@ func (i *installer) Install(ctx context.Context, c *common.Cluster, db *gorm.DB)
 		return errors.Errorf("cluster %s is already installed", c.ID)
 	case models.ClusterStatusError:
 		return errors.Errorf("cluster %s has a error", c.ID)
+	case models.ClusterStatusErrorPendingCollectingLogs:
+		return errors.Errorf("cluster %s wait for log collection before moving to error", c.ID)
 	default:
 		return errors.Errorf("cluster %s state is unclear - cluster state: %s", c.ID, swag.StringValue(c.Status))
 	}

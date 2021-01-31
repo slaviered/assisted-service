@@ -30,9 +30,10 @@ import (
 var defaultHwInfo = "default hw info" // invalid hw info used only for tests
 
 var defaultConfig = &Config{
-	ResetTimeout:     3 * time.Minute,
-	EnableAutoReset:  true,
-	MonitorBatchSize: 100,
+	ResetTimeout:         3 * time.Minute,
+	LogCollectionTimeout: 1 * time.Second,
+	EnableAutoReset:      true,
+	MonitorBatchSize:     100,
 }
 
 var defaultNTPSources = []*models.NtpSource{{SourceName: "1.1.1.1", SourceState: models.SourceStateSynced}}
@@ -361,12 +362,12 @@ var _ = Describe("update_progress", func() {
 				progress.CurrentStage = models.HostStageFailed
 				progress.ProgressInfo = "reason"
 				mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, host.ID, models.EventSeverityError,
-					fmt.Sprintf("Host %s: updated status from \"installing\" to \"error\" (Failed - reason)", host.ID.String()),
+					fmt.Sprintf("Host %s: updated status from \"installing\" to \"error-pending-collecting-logs\" (Failed - reason)", host.ID.String()),
 					gomock.Any())
 				Expect(state.UpdateInstallProgress(ctx, &host, &progress)).ShouldNot(HaveOccurred())
 				hostFromDB = hostutil.GetHostFromDB(*host.ID, host.ClusterID, db)
 
-				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusError))
+				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 				Expect(*hostFromDB.StatusInfo).Should(Equal(fmt.Sprintf("%s - %s", progress.CurrentStage, progress.ProgressInfo)))
 			})
 
@@ -374,12 +375,12 @@ var _ = Describe("update_progress", func() {
 				progress.CurrentStage = models.HostStageFailed
 				progress.ProgressInfo = ""
 				mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, host.ID, models.EventSeverityError,
-					fmt.Sprintf("Host %s: updated status from \"installing\" to \"error\" "+
+					fmt.Sprintf("Host %s: updated status from \"installing\" to \"error-pending-collecting-logs\" "+
 						"(Failed)", host.ID.String()),
 					gomock.Any())
 				Expect(state.UpdateInstallProgress(ctx, &host, &progress)).ShouldNot(HaveOccurred())
 				hostFromDB = hostutil.GetHostFromDB(*host.ID, host.ClusterID, db)
-				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusError))
+				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 				Expect(*hostFromDB.StatusInfo).Should(Equal(string(progress.CurrentStage)))
 			})
 
@@ -406,12 +407,12 @@ var _ = Describe("update_progress", func() {
 						ProgressInfo: "reason",
 					}
 					mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, host.ID, models.EventSeverityError,
-						fmt.Sprintf("Host %s: updated status from \"installing-in-progress\" to \"error\" "+
+						fmt.Sprintf("Host %s: updated status from \"installing-in-progress\" to \"error-pending-collecting-logs\" "+
 							"(Failed - reason)", host.ID.String()),
 						gomock.Any())
 					Expect(state.UpdateInstallProgress(ctx, hostFromDB, &newProgress)).ShouldNot(HaveOccurred())
 					hostFromDB = hostutil.GetHostFromDB(*host.ID, host.ClusterID, db)
-					Expect(*hostFromDB.Status).Should(Equal(models.HostStatusError))
+					Expect(*hostFromDB.Status).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 					Expect(*hostFromDB.StatusInfo).Should(Equal(fmt.Sprintf("%s - %s", newProgress.CurrentStage, newProgress.ProgressInfo)))
 
 					Expect(hostFromDB.Progress.CurrentStage).Should(Equal(progress.CurrentStage))

@@ -145,14 +145,14 @@ var _ = Describe("TestClusterMonitoring", func() {
 				shouldHaveUpdated = false
 				expectedState = "installing"
 			})
-			It("with workers 1 in error, installing -> installing", func() {
+			It("with workers 1 in error, installing -> error (pending log collection)", func() {
 				createHost(id, "installing", db)
 				createHost(id, "installing", db)
 				createHost(id, "installing", db)
 				createWorkerHost(id, "installing", db)
 				createWorkerHost(id, "error", db)
-				shouldHaveUpdated = false
-				expectedState = "installing"
+				shouldHaveUpdated = true
+				expectedState = "error-pending-collecting-logs"
 			})
 			It("with workers 2 in installing, installing -> installing", func() {
 				createHost(id, "installed", db)
@@ -186,10 +186,12 @@ var _ = Describe("TestClusterMonitoring", func() {
 				shouldHaveUpdated = false
 				expectedState = "installing"
 			})
-			It("with worker installing -> installing", func() {
+			It("with worker installing -> finalizing", func() {
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
+				createWorkerHost(id, "installed", db)
+				createWorkerHost(id, "installed", db)
 
 				shouldHaveUpdated = true
 				expectedState = models.ClusterStatusFinalizing
@@ -202,32 +204,32 @@ var _ = Describe("TestClusterMonitoring", func() {
 				shouldHaveUpdated = true
 				expectedState = models.ClusterStatusFinalizing
 			})
-			It("with workers installing -> finalizing", func() {
+			It("with 1 workers installing -> installing", func() {
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				createWorkerHost(id, "installing", db)
 				createWorkerHost(id, "installed", db)
 
-				shouldHaveUpdated = true
-				expectedState = models.ClusterStatusFinalizing
+				shouldHaveUpdated = false
+				expectedState = models.ClusterStatusInstalling
 			})
 
-			It("installing -> error", func() {
+			It("installing -> error (pending log collection) - host in error", func() {
 				mockMetric.EXPECT().ClusterInstallationFinished(gomock.Any(), "error", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				createHost(id, "error", db)
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 			})
-			It("installing -> error", func() {
+			It("installing -> error (pending log collection) - insufficient masters", func() {
 				mockMetric.EXPECT().ClusterInstallationFinished(gomock.Any(), "error", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 			})
 			It("installing -> error insufficient hosts", func() {
 				mockMetric.EXPECT().ClusterInstallationFinished(gomock.Any(), "error", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -235,7 +237,7 @@ var _ = Describe("TestClusterMonitoring", func() {
 				createHost(id, "installed", db)
 				createWorkerHost(id, "installed", db)
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 
 			})
 			It("with workers in error, installing -> error", func() {
@@ -245,23 +247,23 @@ var _ = Describe("TestClusterMonitoring", func() {
 				createWorkerHost(id, "error", db)
 				createWorkerHost(id, "error", db)
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 			})
-			It("with single worker in error, installing -> error", func() {
+			It("with single worker in error, masters installing, installing -> error (pending collecting logs)", func() {
 				createHost(id, "installing", db)
 				createHost(id, "installing", db)
 				createHost(id, "installing", db)
 				createWorkerHost(id, "error", db)
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 			})
-			It("with single worker in error, installing -> error", func() {
+			It("with single worker in error, master installed, installing -> error (pending collecting logs)", func() {
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				createHost(id, "installed", db)
 				createWorkerHost(id, "error", db)
 				shouldHaveUpdated = true
-				expectedState = "error"
+				expectedState = "error-pending-collecting-logs"
 			})
 		})
 		Context("from installed state", func() {

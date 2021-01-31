@@ -997,10 +997,12 @@ var _ = Describe("cluster install", func() {
 			Expect(err).To(BeAssignableToTypeOf(installer.NewRegisterHostConflict()))
 		})
 
-		It("register host while cluster in error state", func() {
+		//SARAH - DEBUG add test for real errror
+		It("register host while cluster in (pending) error state", func() {
 			FailCluster(ctx, clusterID)
 			//Wait for cluster to get to error state
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout,
+			//SARAH - DEBUG first state is collecting logs add here also a test for real error
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout,
 				IgnoreStateInfo)
 			_, err := agentBMClient.Installer.RegisterHost(context.Background(), &installer.RegisterHostParams{
 				ClusterID: clusterID,
@@ -1022,7 +1024,7 @@ var _ = Describe("cluster install", func() {
 			})
 			Expect(err).To(BeNil())
 			host := getHost(clusterID, *hostID)
-			Expect(*host.Status).To(Equal("error"))
+			Expect(*host.Status).To(Equal(models.ClusterStatusErrorPendingCollectingLogs))
 		})
 
 		It("register host after reboot - wrong boot order", func() {
@@ -1120,14 +1122,17 @@ var _ = Describe("cluster install", func() {
 			}
 
 			waitForClusterState(ctx, clusterID, models.ClusterStatusFinalizing, defaultWaitForClusterStateTimeout, clusterFinalizingStateInfo)
-			By("Failing installation")
+			By("Failing installation after all host done and cluster is in finalizing state")
 			success := false
 			_, err := agentBMClient.Installer.CompleteInstallation(ctx,
 				&installer.CompleteInstallationParams{ClusterID: clusterID, CompletionParams: &models.CompletionParams{IsSuccess: &success, ErrorInfo: "failed"}})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Verifying installation failed")
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout, clusterErrorInfo)
+			By("Verifying installation moved to error pending log collection")
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout, clusterErrorInfo)
+
+			By("Done collection logs")
+			waitForLogCollection(c)
 
 			By("Verifying completion date field")
 			resp, _ := agentBMClient.Installer.GetCluster(ctx, &installer.GetClusterParams{ClusterID: clusterID})
@@ -1163,7 +1168,8 @@ var _ = Describe("cluster install", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying installation failed")
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout, "cluster has hosts in error")
+			//SARAH - DEBUG add also wait for a real error state
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout, "cluster has hosts in error")
 		})
 
 		It("install_cluster assisted-installer already running", func() {
@@ -1276,7 +1282,8 @@ var _ = Describe("cluster install", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure installation failed
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout, clusterErrorInfo)
+			//SARAH - DEBUG add wait for real error state
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout, clusterErrorInfo)
 
 			updateReply, err = agentBMClient.Installer.UpdateClusterInstallProgress(ctx, &installer.UpdateClusterInstallProgressParams{
 				ClusterID:       *registerClusterReply.GetPayload().ID,
@@ -1378,7 +1385,8 @@ var _ = Describe("cluster install", func() {
 				updateProgressWithInfo(*hosts[1].ID, clusterID, installProgress, installInfo)
 				hostFromDB := getHost(clusterID, *hosts[1].ID)
 
-				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusError))
+				//SARAH - DEBUG add here also transition to error
+				Expect(*hostFromDB.Status).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 				Expect(*hostFromDB.StatusInfo).Should(Equal(fmt.Sprintf("%s - %s", installProgress, installInfo)))
 				Expect(hostFromDB.Progress.CurrentStage).Should(Equal(models.HostStageWritingImageToDisk)) // Last stage
 				Expect(hostFromDB.Progress.ProgressInfo).Should(BeEmpty())
@@ -1398,14 +1406,15 @@ var _ = Describe("cluster install", func() {
 				Expect(err).Should(HaveOccurred())
 			})
 
-			By("verify_everything_changed_error", func() {
-				waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout,
+			By("verify_everything_changed_error_pending_logs", func() {
+				waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout,
 					IgnoreStateInfo)
 				rep, err := userBMClient.Installer.GetCluster(ctx, &installer.GetClusterParams{ClusterID: clusterID})
 				Expect(err).NotTo(HaveOccurred())
 				c := rep.GetPayload()
 				for _, host := range c.Hosts {
-					waitForHostState(ctx, clusterID, *host.ID, models.HostStatusError, defaultWaitForHostStateTimeout)
+					//SARAH - DEBUG wait also for a real error state
+					waitForHostState(ctx, clusterID, *host.ID, models.HostStatusErrorPendingCollectingLogs, defaultWaitForHostStateTimeout)
 				}
 			})
 		})
@@ -1441,9 +1450,10 @@ var _ = Describe("cluster install", func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer os.Remove(file.Name())
 
+			//SARAH - DEBUG fail here to real error state
 			FailCluster(ctx, clusterID)
 			//Wait for cluster to get to error state
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout,
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout,
 				IgnoreStateInfo)
 
 			_, err = userBMClient.Installer.DownloadClusterFiles(ctx, &installer.DownloadClusterFilesParams{ClusterID: clusterID, FileName: "bootstrap.ign"}, file)
@@ -1498,11 +1508,8 @@ var _ = Describe("cluster install", func() {
 
 			By("Test happy flow small file")
 			{
-				kubeconfigFile, err := os.Open("test_kubeconfig")
-				Expect(err).NotTo(HaveOccurred())
 				_ = register3nodes(clusterID)
-				_, err = agentBMClient.Installer.UploadLogs(ctx, &installer.UploadLogsParams{ClusterID: clusterID, LogsType: string(models.LogsTypeController), Upfile: kubeconfigFile})
-				Expect(err).NotTo(HaveOccurred())
+				collectClusterLogs(clusterID)
 				logsType := string(models.LogsTypeController)
 				file, err := ioutil.TempFile("", "tmp")
 				Expect(err).NotTo(HaveOccurred())
@@ -1515,11 +1522,8 @@ var _ = Describe("cluster install", func() {
 
 			By("Test happy flow host logs file")
 			{
-				kubeconfigFile, err := os.Open("test_kubeconfig")
-				Expect(err).NotTo(HaveOccurred())
 				hosts := register3nodes(clusterID)
-				_, err = agentBMClient.Installer.UploadHostLogs(ctx, &installer.UploadHostLogsParams{ClusterID: clusterID, HostID: *hosts[0].ID, Upfile: kubeconfigFile})
-				Expect(err).NotTo(HaveOccurred())
+				collectHostLogs(*hosts[0].ID, clusterID)
 
 				file, err := ioutil.TempFile("", "tmp")
 				Expect(err).NotTo(HaveOccurred())
@@ -1689,14 +1693,15 @@ var _ = Describe("cluster install", func() {
 			}
 		})
 
-		It("on cluster error - verify all hosts are aborted", func() {
+		//SARAH - DEBUG add here also failure to a real cluster state
+		It("on cluster pending error - verify all hosts are aborted", func() {
 			FailCluster(ctx, clusterID)
-			waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout, clusterErrorInfo)
+			waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout, clusterErrorInfo)
 			rep, err := userBMClient.Installer.GetCluster(ctx, &installer.GetClusterParams{ClusterID: clusterID})
 			Expect(err).NotTo(HaveOccurred())
 			c := rep.GetPayload()
 			for _, host := range c.Hosts {
-				waitForHostState(ctx, clusterID, *host.ID, models.HostStatusError, defaultWaitForHostStateTimeout)
+				waitForHostState(ctx, clusterID, *host.ID, models.HostStatusErrorPendingCollectingLogs, defaultWaitForHostStateTimeout)
 			}
 		})
 
@@ -1730,15 +1735,17 @@ var _ = Describe("cluster install", func() {
 			})
 			It("cancel failed cluster", func() {
 				By("verify cluster is in error")
+				//SARAH - DEBUG add here also a real error state
 				FailCluster(ctx, clusterID)
-				waitForClusterState(ctx, clusterID, models.ClusterStatusError, defaultWaitForClusterStateTimeout,
+				waitForClusterState(ctx, clusterID, models.ClusterStatusErrorPendingCollectingLogs, defaultWaitForClusterStateTimeout,
 					clusterErrorInfo)
 				rep, err := userBMClient.Installer.GetCluster(ctx, &installer.GetClusterParams{ClusterID: clusterID})
 				Expect(err).ShouldNot(HaveOccurred())
 				c := rep.GetPayload()
-				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusErrorPendingCollectingLogs))
+				//SARAH - DEBUG add here also a real error state
 				for _, host := range c.Hosts {
-					waitForHostState(ctx, clusterID, *host.ID, models.HostStatusError,
+					waitForHostState(ctx, clusterID, *host.ID, models.HostStatusErrorPendingCollectingLogs,
 						defaultWaitForHostStateTimeout)
 				}
 				By("cancel installation, check cluster and hosts statuses")
@@ -2745,9 +2752,19 @@ func FailCluster(ctx context.Context, clusterID strfmt.UUID) strfmt.UUID {
 
 	updateProgressWithInfo(masterHostID, clusterID, installStep, installInfo)
 	masterHost := getHost(clusterID, masterHostID)
-	Expect(*masterHost.Status).Should(Equal("error"))
-	Expect(*masterHost.StatusInfo).Should(Equal(fmt.Sprintf("%s - %s", installStep, installInfo)))
+	//SARAH - DEBUG Let's see what the behavior when hosts are in log colection
+	//Expect(*masterHost.Status).Should(Equal("error"))
+	//Expect(*masterHost.StatusInfo).Should(Equal(fmt.Sprintf("%s - %s", installStep, installInfo)))
+	fmt.Printf("####### Failing the cluster: master-0 status = %s status info = %s\n", *masterHost.Status, *masterHost.StatusInfo)
 	return masterHostID
+}
+
+func waitForLogCollection(c *models.Cluster) {
+	for _, h := range c.Hosts {
+		collectHostLogs(*h.ID, *c.ID)
+	}
+	collectClusterLogs(*c.ID)
+	waitForClusterState(context.Background(), *c.ID, models.ClusterStatusError, defaultWaitForClusterStateTimeout, clusterErrorInfo)
 }
 
 var _ = Describe("cluster install, with default network params", func() {

@@ -33,7 +33,12 @@ func UpdateHostStatus(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, 
 	var host *models.Host
 	var err error
 
-	extra = append(append(make([]interface{}, 0), "status", newStatus, "status_info", statusInfo), extra...)
+	//SARAH
+	//extra = append(append(make([]interface{}, 0), "status", newStatus, "status_info", statusInfo), extra...)
+	extra = append(append(make([]interface{}, 0), "status", newStatus), extra...)
+	if statusInfo != "" {
+		extra = append(extra, "status_info", statusInfo)
+	}
 
 	if newStatus != srcStatus {
 		extra = append(extra, "status_updated_at", strfmt.DateTime(time.Now()))

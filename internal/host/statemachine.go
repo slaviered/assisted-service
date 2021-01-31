@@ -87,8 +87,21 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusInstalling),
 			stateswitch.State(models.HostStatusInstallingInProgress),
 		},
-		DestinationState: stateswitch.State(models.HostStatusError),
+		//DestinationState: stateswitch.State(models.HostStatusError), //SARAH
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostRegisterDuringInstallation,
+	})
+
+	// Register host during log collection is equivalent to registering during error
+	// Allow the host to stay in the same state until logs are collected and then
+	// the host be transferred to error state. This preserve the former behaviour
+	// where logs were collected implicitly during error state
+	sm.AddTransition(stateswitch.TransitionRule{
+		TransitionType: TransitionTypeRegisterHost,
+		SourceStates: []stateswitch.State{
+			stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
+		},
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
 	})
 
 	// Host in error should be able to register without changes.
@@ -119,7 +132,8 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusInstalling),
 			stateswitch.State(models.HostStatusInstallingInProgress),
 		},
-		DestinationState: stateswitch.State(models.HostStatusError),
+		//DestinationState: stateswitch.State(models.HostStatusError), //SARAH
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostHostInstallationFailed,
 	})
 
@@ -141,6 +155,7 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusInstalling),
 			stateswitch.State(models.HostStatusInstallingInProgress),
 			stateswitch.State(models.HostStatusInstalled),
+			stateswitch.State(models.HostStatusErrorPendingCollectingLogs), //SARAH - cancel should override everything. even logs
 			stateswitch.State(models.HostStatusError),
 		},
 		DestinationState: stateswitch.State(models.HostStatusCancelled),
@@ -165,6 +180,7 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusPreparingForInstallation),
 			stateswitch.State(models.HostStatusInstallingInProgress),
 			stateswitch.State(models.HostStatusInstalled),
+			stateswitch.State(models.HostStatusErrorPendingCollectingLogs), //SARAH - reset should override everything including logs
 			stateswitch.State(models.HostStatusError),
 			stateswitch.State(models.HostStatusCancelled),
 			stateswitch.State(models.HostStatusAddedToExistingCluster),
@@ -239,6 +255,7 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusPreparingForInstallation),
 			stateswitch.State(models.HostStatusInstallingInProgress),
 			stateswitch.State(models.HostStatusInstalled),
+			stateswitch.State(models.HostStatusErrorPendingCollectingLogs), //SARAH - reset should override everything including logs
 			stateswitch.State(models.HostStatusError),
 			stateswitch.State(models.HostStatusCancelled),
 			stateswitch.State(models.HostStatusAddedToExistingCluster),
@@ -291,8 +308,9 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 			stateswitch.State(models.HostStatusResettingPendingUserAction),
 			stateswitch.State(models.HostStatusInstallingPendingUserAction),
 		},
-		Condition:        stateswitch.And(th.HasClusterError, stateswitch.Not(th.IsDay2Host)),
-		DestinationState: stateswitch.State(models.HostStatusError),
+		Condition: stateswitch.And(th.HasClusterError, stateswitch.Not(th.IsDay2Host)),
+		//DestinationState: stateswitch.State(models.HostStatusError),
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs), //SARAH
 		PostTransition:   th.PostRefreshHost(statusInfoAbortingDueClusterErrors),
 	})
 
@@ -301,8 +319,9 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		TransitionType: TransitionTypeRefresh,
 		SourceStates: []stateswitch.State{
 			stateswitch.State(models.HostStatusInstalling)},
-		Condition:        stateswitch.And(th.HasInstallationTimedOut),
-		DestinationState: stateswitch.State(models.HostStatusError),
+		Condition: stateswitch.And(th.HasInstallationTimedOut),
+		//DestinationState: stateswitch.State(models.HostStatusError),
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs), //SARAH
 		PostTransition:   th.PostRefreshHost(statusInfoInstallationTimedOut),
 	})
 
@@ -323,8 +342,19 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		Condition: stateswitch.And(
 			th.HasInstallationInProgressTimedOut,
 			stateswitch.Not(th.ShouldIgnoreInstallingInProgressTimeout)),
-		DestinationState: stateswitch.State(models.HostStatusError),
+		//
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostRefreshHost(statusInfoInstallationInProgressTimedOut),
+	})
+
+	// log collection on error finished
+	sm.AddTransition(stateswitch.TransitionRule{
+		TransitionType: TransitionTypeRefresh,
+		SourceStates: []stateswitch.State{
+			stateswitch.State(models.HostStatusErrorPendingCollectingLogs)},
+		Condition:        stateswitch.Or(th.IsLogsCollected, th.LogCollectionTimeout),
+		DestinationState: stateswitch.State(models.HostStatusError),
+		PostTransition:   th.PostRefreshHost(""),
 	})
 
 	// Noop transitions for cluster error
@@ -437,8 +467,9 @@ func NewHostStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		SourceStates: []stateswitch.State{
 			stateswitch.State(models.HostStatusPreparingForInstallation),
 		},
-		Condition:        th.IsPreparingTimedOut,
-		DestinationState: stateswitch.State(models.HostStatusError),
+		Condition: th.IsPreparingTimedOut,
+		//DestinationState: stateswitch.State(models.HostStatusError), //SARAH TODO: Is this correct phase to collect logs?
+		DestinationState: stateswitch.State(models.HostStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostRefreshHost(statusInfoPreparingTimedOut),
 	})
 

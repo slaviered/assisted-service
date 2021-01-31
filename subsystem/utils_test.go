@@ -3,6 +3,7 @@ package subsystem
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"time"
 
 	"github.com/go-openapi/strfmt"
@@ -84,6 +85,24 @@ func getNextSteps(clusterID, hostID strfmt.UUID) models.Steps {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return *steps.GetPayload()
+}
+
+func collectHostLogs(hostID strfmt.UUID, clusterID strfmt.UUID) {
+	logfile, err := os.Open("test_kubeconfig")
+	Expect(err).NotTo(HaveOccurred())
+	defer logfile.Close()
+	_, err = agentBMClient.Installer.UploadHostLogs(context.Background(),
+		&installer.UploadHostLogsParams{ClusterID: clusterID, HostID: hostID, Upfile: logfile})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func collectClusterLogs(clusterID strfmt.UUID) {
+	logfile, err := os.Open("test_kubeconfig")
+	Expect(err).NotTo(HaveOccurred())
+	defer logfile.Close()
+	_, err = agentBMClient.Installer.UploadLogs(context.Background(),
+		&installer.UploadLogsParams{ClusterID: clusterID, LogsType: string(models.LogsTypeController), Upfile: logfile})
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func updateProgress(hostID strfmt.UUID, clusterID strfmt.UUID, current_step models.HostStage) {

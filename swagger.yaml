@@ -3023,6 +3023,7 @@ definitions:
           - resetting
           - added-to-existing-cluster
           - cancelled
+          - error-pending-collecting-logs
       status_info:
         type: string
         x-go-custom-tag: gorm:"type:varchar(2048)"
@@ -3586,6 +3587,7 @@ definitions:
           - adding-hosts
           - cancelled
           - installing-pending-user-action
+          - error-pending-collecting-logs
       status_info:
         type: string
         x-go-custom-tag: gorm:"type:varchar(2048)"

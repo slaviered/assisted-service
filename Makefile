@@ -144,8 +144,7 @@ build-minimal: $(BUILD_FOLDER)
 build-image: build
 	docker build $(CONTAINER_BUILD_PARAMS) -f Dockerfile.assisted-service . -t $(SERVICE)
 
-update-service:
-	skipper make build-image
+update-service: build-image
 	docker push $(SERVICE)
 
 update: build-all

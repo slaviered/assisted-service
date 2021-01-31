@@ -13,11 +13,13 @@ const (
 	TransitionTypeCompleteInstallation       = "CompleteInstallation"
 	TransitionTypeHandlePreInstallationError = "Handle pre-installation-error"
 	TransitionTypeRefreshStatus              = "RefreshStatus"
+	TransitionTypeCollectingLogs             = "CollectingLogs"
 )
 
 func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 	sm := stateswitch.NewStateMachine()
 
+	//SARAH TODO: Do we collect logs on transition to cancel (today instructionmanager collectes log on cancel)
 	sm.AddTransition(stateswitch.TransitionRule{
 		TransitionType: TransitionTypeCancelInstallation,
 		SourceStates: []stateswitch.State{
@@ -69,14 +71,28 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		PostTransition:   th.PostCompleteInstallation,
 	})
 
+	//SARAH - insert log state
 	sm.AddTransition(stateswitch.TransitionRule{
 		TransitionType: TransitionTypeCompleteInstallation,
 		Condition:      th.notSuccess,
 		SourceStates: []stateswitch.State{
 			stateswitch.State(models.ClusterStatusFinalizing),
 		},
-		DestinationState: stateswitch.State(models.ClusterStatusError),
+		//DestinationState: stateswitch.State(models.ClusterStatusError),
+		//PostTransition:   th.PostCompleteInstallation,
+		DestinationState: stateswitch.State(models.ClusterStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostCompleteInstallation,
+	})
+
+	//SARAH - logs are checked in the refresh state
+	sm.AddTransition(stateswitch.TransitionRule{
+		TransitionType: TransitionTypeRefreshStatus,
+		SourceStates: []stateswitch.State{
+			stateswitch.State(models.ClusterStatusErrorPendingCollectingLogs),
+		},
+		Condition:        stateswitch.Or(th.IsLogsCollected, th.LogCollectionTimeout),
+		DestinationState: stateswitch.State(models.ClusterStatusError),
+		PostTransition:   th.PostRefreshCluster(statusInfoError),
 	})
 
 	sm.AddTransition(stateswitch.TransitionRule{
@@ -186,13 +202,15 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		PostTransition:   th.PostRefreshCluster(statusInfoPreparingForInstallationTimeout),
 	})
 
+	//SARAH TODO: do we need here logs on the cluster level?
 	sm.AddTransition(stateswitch.TransitionRule{
 		TransitionType: TransitionTypeRefreshStatus,
 		SourceStates: []stateswitch.State{
 			stateswitch.State(models.ClusterStatusInstallingPendingUserAction),
 		},
-		Condition:        stateswitch.Not(th.IsInstalling),
-		DestinationState: stateswitch.State(models.ClusterStatusError),
+		Condition: stateswitch.Not(th.IsInstalling),
+		//DestinationState: stateswitch.State(models.ClusterStatusError),
+		DestinationState: stateswitch.State(models.ClusterStatusErrorPendingCollectingLogs),
 		PostTransition:   th.PostRefreshCluster(statusInfoError),
 	})
 
@@ -259,6 +277,7 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 	})
 
 	// This transition is fired when the cluster is in installing and should move to error
+	// SARAH TODO: do we really have here logs on cluster level? not sure here controller is up at all
 	sm.AddTransition(stateswitch.TransitionRule{
 		TransitionType: TransitionTypeRefreshStatus,
 		SourceStates: []stateswitch.State{
@@ -267,8 +286,9 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		Condition: stateswitch.And(
 			stateswitch.Not(th.IsFinalizing),
 			stateswitch.Not(th.IsInstalling)),
-		DestinationState: stateswitch.State(models.ClusterStatusError),
-		PostTransition:   th.PostRefreshCluster(statusInfoError),
+		//DestinationState: stateswitch.State(models.ClusterStatusError), //SARAH
+		DestinationState: stateswitch.State(models.ClusterStatusErrorPendingCollectingLogs),
+		PostTransition:   th.PostRefreshCluster(statusInfoError), //SARAH - transition to error will be done after logs are collected
 	})
 
 	for _, state := range []stateswitch.State{

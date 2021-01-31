@@ -19,7 +19,7 @@ import (
 
 const (
 	MinMastersNeededForInstallation = 3
-	MinWorkersNeededForInstallation = 1
+	MinWorkersNeededForInstallation = 2
 )
 
 const (
@@ -41,7 +41,12 @@ func updateClusterStatus(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.U
 	var cluster *common.Cluster
 	var err error
 
-	extra = append(append(make([]interface{}, 0), "status", newStatus, "status_info", statusInfo), extra...)
+	//SARAH
+	//extra = append(append(make([]interface{}, 0), "status", newStatus, "status_info", statusInfo), extra...)
+	extra = append(append(make([]interface{}, 0), "status", newStatus), extra...)
+	if statusInfo != "" {
+		extra = append(extra, "status_info", statusInfo)
+	}
 
 	if newStatus != srcStatus {
 		now := strfmt.DateTime(time.Now())

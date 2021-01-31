@@ -30,6 +30,7 @@ type transitionHandler struct {
 	db            *gorm.DB
 	log           logrus.FieldLogger
 	eventsHandler events.Handler
+	config        *Config
 }
 
 var resetFields = [...]interface{}{"inventory", "", "bootstrap", false, "ntp_sources", ""}
@@ -438,7 +439,8 @@ func (th *transitionHandler) HasClusterError(sw stateswitch.StateSwitch, args st
 	if err != nil {
 		return false, err
 	}
-	return swag.StringValue(cluster.Status) == models.ClusterStatusError, nil
+	hasClusterError := swag.StringValue(cluster.Status) == models.ClusterStatusError || swag.StringValue(cluster.Status) == models.ClusterStatusErrorPendingCollectingLogs
+	return hasClusterError, nil
 }
 
 func (th *transitionHandler) HasInstallationTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
@@ -583,4 +585,22 @@ func (th *transitionHandler) PostRefreshHostRefreshStageUpdateTime(
 		*sHost.host.ID,
 		sHost.srcState)
 	return err
+}
+
+//SARAH
+func (th *transitionHandler) IsLogsCollected(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sHost, ok := sw.(*stateHost)
+	if !ok {
+		return false, errors.New("IsLogsCollected incompatible type of StateSwitch")
+	}
+
+	return sHost.host.LogsCollectedAt != strfmt.DateTime(time.Time{}), nil
+}
+
+func (th *transitionHandler) LogCollectionTimeout(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sHost, ok := sw.(*stateHost)
+	if !ok {
+		return false, errors.New("LogCollectionTimeout incompatible type of StateSwitch")
+	}
+	return time.Since(time.Time(sHost.host.StatusUpdatedAt)) > th.config.LogCollectionTimeout, nil
 }

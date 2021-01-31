@@ -267,7 +267,7 @@ var _ = Describe("Host tests", func() {
 		})
 		Expect(err).ShouldNot(HaveOccurred())
 		host = getHost(clusterID, *host.ID)
-		Expect(swag.StringValue(host.Status)).Should(Equal("error"))
+		Expect(swag.StringValue(host.Status)).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 		Expect(swag.StringValue(host.StatusInfo)).Should(Equal("installation command failed"))
 
 	})

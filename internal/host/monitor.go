@@ -33,6 +33,7 @@ func (m *Manager) HostMonitoring() {
 		models.HostStatusInstalled,
 		models.HostStatusInstallingPendingUserAction,
 		models.HostStatusResettingPendingUserAction,
+		models.HostStatusErrorPendingCollectingLogs,
 	}
 	for {
 		//for offset = 0; offset < count; offset += limit {

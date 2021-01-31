@@ -264,7 +264,7 @@ func (th *transitionHandler) IsFinalizing(sw stateswitch.StateSwitch, args state
 	sCluster, ok := sw.(*stateCluster)
 	installedStatus := []string{models.HostStatusInstalled}
 
-	// Move to finalizing state when 3 masters and at least 1 worker (if workers are given) moved to installed state
+	// Move to finalizing state when 3 masters and at least 2 worker (if workers are given) moved to installed state
 	if ok && th.enoughMastersAndWorkers(sCluster, installedStatus) {
 		th.log.Infof("Cluster %s has at least required number of installed hosts, "+
 			"cluster is finalizing.", sCluster.cluster.ID)
@@ -312,7 +312,7 @@ func (th *transitionHandler) enoughMastersAndWorkers(sCluster *stateCluster, sta
 		minRequiredMasterNodes = 1
 	}
 
-	// to be installed cluster need 3 master and at least 1 worker(if workers were given)
+	// to be installed cluster need 3 master and at least 2 workers (if workers were given)
 	if mastersInSomeInstallingStatus >= minRequiredMasterNodes &&
 		(numberOfExpectedWorkers == 0 || workersInSomeInstallingStatus >= MinWorkersNeededForInstallation) {
 		return true
@@ -428,4 +428,24 @@ func setPendingUserReset(ctx context.Context, c *common.Cluster, db *gorm.DB, ho
 	}
 	txSuccess = true
 	return nil
+}
+
+func (th *transitionHandler) IsLogsCollected(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sCluster, ok := sw.(*stateCluster)
+	if !ok {
+		return false, errors.New("IsLogsCollected incompatible type of StateSwitch")
+	}
+
+	return sCluster.cluster.ControllerLogsCollectedAt != strfmt.DateTime(time.Time{}), nil
+}
+
+//TODO SARAH: Implement real implementation
+func (th *transitionHandler) LogCollectionTimeout(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sCluster, ok := sw.(*stateCluster)
+	if !ok {
+		return false, errors.New("LogCollectionTimeout incompatible type of StateSwitch")
+	}
+	// cluster level log collection is for various controller logs
+	// SARAH TODO: check there that the master hosts are in correct state for this effort
+	return time.Since(time.Time(sCluster.cluster.StatusUpdatedAt)) > th.prepareConfig.LogCollectionTimeout, nil
 }

@@ -82,15 +82,15 @@ var _ = Describe("RegisterHost", func() {
 			{
 				name:                "discovering",
 				srcState:            models.HostStatusInstalling,
-				dstState:            models.HostStatusError,
-				expectedEventInfo:   "Host %s: updated status from \"installing\" to \"error\" (The host unexpectedly restarted during the installation)",
+				dstState:            models.HostStatusErrorPendingCollectingLogs,
+				expectedEventInfo:   "Host %s: updated status from \"installing\" to \"error-pending-collecting-logs\" (The host unexpectedly restarted during the installation)",
 				expectedEventStatus: models.EventSeverityError,
 			},
 			{
 				name:                "insufficient",
 				srcState:            models.HostStatusInstallingInProgress,
-				dstState:            models.HostStatusError,
-				expectedEventInfo:   "Host %s: updated status from \"installing-in-progress\" to \"error\" (The host unexpectedly restarted during the installation)",
+				dstState:            models.HostStatusErrorPendingCollectingLogs,
+				expectedEventInfo:   "Host %s: updated status from \"installing-in-progress\" to \"error-pending-collecting-logs\" (The host unexpectedly restarted during the installation)",
 				expectedEventStatus: models.EventSeverityError,
 			},
 			{
@@ -448,12 +448,12 @@ var _ = Describe("HostInstallationFailed", func() {
 
 	It("handle_installation_error", func() {
 		mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, &hostId, models.EventSeverityError,
-			fmt.Sprintf("Host %s: updated status from \"installing\" to \"error\" (installation command failed)", host.ID.String()),
+			fmt.Sprintf("Host %s: updated status from \"installing\" to \"error-pending-collecting-logs\" (installation command failed)", host.ID.String()),
 			gomock.Any())
 		mockMetric.EXPECT().ReportHostInstallationMetrics(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		Expect(hapi.HandleInstallationFailure(ctx, &host)).ShouldNot(HaveOccurred())
 		h := hostutil.GetHostFromDB(hostId, clusterId, db)
-		Expect(swag.StringValue(h.Status)).Should(Equal(models.HostStatusError))
+		Expect(swag.StringValue(h.Status)).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 		Expect(swag.StringValue(h.StatusInfo)).Should(Equal("installation command failed"))
 	})
 
@@ -1229,7 +1229,7 @@ var _ = Describe("Refresh Host", func() {
 						gomock.Any(),
 						host.ClusterID,
 						&hostId,
-						hostutil.GetEventSeverityFromHostStatus(models.HostStatusError),
+						hostutil.GetEventSeverityFromHostStatus(models.HostStatusErrorPendingCollectingLogs),
 						gomock.Any(),
 						gomock.Any())
 				}
@@ -1241,7 +1241,7 @@ var _ = Describe("Refresh Host", func() {
 				currStageUpdateAt := time.Time(resultHost.Progress.StageUpdatedAt).UTC().Round(time.Second).String()
 				if t.expectTimeout {
 					Expect(prevStageUpdatedAt).Should(Equal(currStageUpdateAt))
-					Expect(swag.StringValue(resultHost.Status)).Should(Equal(models.HostStatusError))
+					Expect(swag.StringValue(resultHost.Status)).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 					Expect(swag.StringValue(resultHost.StatusInfo)).Should(Equal(formatProgressTimedOutInfo(t.stage)))
 				} else {
 					if funk.Contains(WrongBootOrderIgnoreTimeoutStages, t.stage) {
@@ -1284,7 +1284,8 @@ var _ = Describe("Refresh Host", func() {
 				cluster = hostutil.GenerateTestCluster(clusterId, "1.2.3.0/24")
 				Expect(db.Create(&cluster).Error).ToNot(HaveOccurred())
 
-				mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, &hostId, hostutil.GetEventSeverityFromHostStatus(models.HostStatusError),
+				mockEvents.EXPECT().AddEvent(gomock.Any(), host.ClusterID, &hostId,
+					hostutil.GetEventSeverityFromHostStatus(models.HostStatusErrorPendingCollectingLogs),
 					gomock.Any(), gomock.Any())
 				err := hapi.RefreshStatus(ctx, &host, db)
 
@@ -1292,7 +1293,7 @@ var _ = Describe("Refresh Host", func() {
 				var resultHost models.Host
 				Expect(db.Take(&resultHost, "id = ? and cluster_id = ?", hostId.String(), clusterId.String()).Error).ToNot(HaveOccurred())
 
-				Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusError))
+				Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusErrorPendingCollectingLogs))
 				info := formatProgressTimedOutInfo(stage) + hostNotRespondingNotification
 				Expect(swag.StringValue(resultHost.StatusInfo)).To(MatchRegexp(info))
 
@@ -1338,7 +1339,7 @@ var _ = Describe("Refresh Host", func() {
 				if passedTimeKind == "under_timeout" {
 					Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusInstalling))
 				} else {
-					Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusError))
+					Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusErrorPendingCollectingLogs))
 					Expect(swag.StringValue(resultHost.StatusInfo)).To(Equal("Host failed to install due to timeout while starting installation"))
 				}
 			})
@@ -1401,7 +1402,7 @@ var _ = Describe("Refresh Host", func() {
 					if passedTimeKind == "under_timeout" {
 						Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusInstallingInProgress))
 					} else {
-						Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusError))
+						Expect(swag.StringValue(resultHost.Status)).To(Equal(models.HostStatusErrorPendingCollectingLogs))
 						info := formatProgressTimedOutInfo(stage)
 						Expect(swag.StringValue(resultHost.StatusInfo)).To(Equal(info))
 					}
@@ -2297,7 +2298,7 @@ var _ = Describe("Refresh Host", func() {
 			},
 			{
 				name:          "Timeout",
-				dstState:      models.HostStatusError,
+				dstState:      models.HostStatusErrorPendingCollectingLogs,
 				statusInfo:    statusInfoPreparingTimedOut,
 				clusterStatus: models.ClusterStatusInstalled,
 			},
@@ -2797,13 +2798,13 @@ var _ = Describe("Refresh Host", func() {
 					Expect(db.Create(&c).Error).ToNot(HaveOccurred())
 
 					mockEvents.EXPECT().AddEvent(gomock.Any(), clusterId, &hostId, models.EventSeverityError,
-						fmt.Sprintf("Host master-hostname: updated status from \"%s\" to \"error\" (Host is part of a cluster that failed to install)", srcState),
+						fmt.Sprintf("Host master-hostname: updated status from \"%s\" to \"error-pending-collecting-logs\" (Host is part of a cluster that failed to install)", srcState),
 						gomock.Any())
 
 					err := hapi.RefreshStatus(ctx, &h, db)
 
 					Expect(err).ShouldNot(HaveOccurred())
-					Expect(swag.StringValue(h.Status)).Should(Equal(models.HostStatusError))
+					Expect(swag.StringValue(h.Status)).Should(Equal(models.HostStatusErrorPendingCollectingLogs))
 
 					var resultHost models.Host
 					Expect(db.Take(&resultHost, "id = ? and cluster_id = ?", hostId.String(), clusterId.String()).Error).ToNot(HaveOccurred())

@@ -82,7 +82,7 @@ var _ = Describe("Transition tests", func() {
 			}
 			Expect(db.Create(&c).Error).ShouldNot(HaveOccurred())
 			mockMetric.EXPECT().ClusterInstallationFinished(gomock.Any(), "canceled", c.OpenshiftVersion, *c.ID, c.EmailDomain, c.InstallStartedAt)
-			Expect(capi.CancelInstallation(ctx, &c, "", db)).ShouldNot(HaveOccurred())
+			Expect(capi.CancelInstallation(ctx, &c, "Installation was canceled by user", db)).ShouldNot(HaveOccurred())
 
 			Expect(db.First(&c, "id = ?", c.ID).Error).ShouldNot(HaveOccurred())
 			Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusCancelled))
@@ -111,7 +111,7 @@ var _ = Describe("Transition tests", func() {
 			Expect(capi.CompleteInstallation(ctx, &c, false, "aaaa")).ShouldNot(HaveOccurred())
 
 			Expect(db.First(&c, "id = ?", c.ID).Error).ShouldNot(HaveOccurred())
-			Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+			Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusErrorPendingCollectingLogs))
 			Expect(swag.StringValue(c.StatusInfo)).Should(Equal("aaaa"))
 
 		})
@@ -2437,7 +2437,7 @@ var _ = Describe("Refresh Cluster - Installing Cases", func() {
 				name:               "installing-pending-user-action to error",
 				srcState:           models.ClusterStatusInstallingPendingUserAction,
 				srcStatusInfo:      statusInfoInstallingPendingUserAction,
-				dstState:           models.ClusterStatusError,
+				dstState:           models.ClusterStatusErrorPendingCollectingLogs,
 				machineNetworkCidr: "1.2.3.0/24",
 				apiVip:             "1.2.3.5",
 				ingressVip:         "1.2.3.6",
@@ -2454,7 +2454,7 @@ var _ = Describe("Refresh Cluster - Installing Cases", func() {
 				name:               "installing-pending-user-action to error (2)",
 				srcState:           models.ClusterStatusInstallingPendingUserAction,
 				srcStatusInfo:      statusInfoInstallingPendingUserAction,
-				dstState:           models.ClusterStatusError,
+				dstState:           models.ClusterStatusErrorPendingCollectingLogs,
 				machineNetworkCidr: "1.2.3.0/24",
 				apiVip:             "1.2.3.5",
 				ingressVip:         "1.2.3.6",
@@ -2502,10 +2502,10 @@ var _ = Describe("Refresh Cluster - Installing Cases", func() {
 				statusInfoChecker: makeValueChecker(statusInfoFinalizing),
 			},
 			{
-				name:               "installing to error",
+				name:               "installing to error (pending logs)",
 				srcState:           models.ClusterStatusInstalling,
 				srcStatusInfo:      statusInfoInstalling,
-				dstState:           models.ClusterStatusError,
+				dstState:           models.ClusterStatusErrorPendingCollectingLogs,
 				machineNetworkCidr: "1.2.3.0/24",
 				apiVip:             "1.2.3.5",
 				ingressVip:         "1.2.3.6",
