@@ -510,7 +510,7 @@ var _ = Describe("TestClusterMonitoring", func() {
 			clusterApi.ClusterMonitoring()
 
 			var count int
-			err := db.Model(&common.Cluster{}).Where("status = ?", models.ClusterStatusInsufficient).
+			err = db.Model(&common.Cluster{}).Where("status = ?", models.ClusterStatusInsufficient).
 				Count(&count).Error
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(count).Should(Equal(nClusters))
@@ -523,6 +523,47 @@ var _ = Describe("TestClusterMonitoring", func() {
 		It("352 clusters monitor", func() {
 			monitorKnownToInsufficient(352)
 		})
+	})
+
+	Context("monitoring log info", func() {
+		Context("error -> error", func() {
+			var (
+				ctx = context.Background()
+			)
+
+			BeforeEach(func() {
+				c = common.Cluster{Cluster: models.Cluster{
+					ID:                 &id,
+					Status:             swag.String("error"),
+					StatusInfo:         swag.String(statusInfoError),
+					MachineNetworkCidr: "1.1.0.0/16",
+					BaseDNSDomain:      "test.com",
+					PullSecretSet:      true,
+				}}
+
+				Expect(db.Create(&c).Error).ShouldNot(HaveOccurred())
+				Expect(err).ShouldNot(HaveOccurred())
+				mockEvents.EXPECT().AddEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				mockHostAPI.EXPECT().IsRequireUserActionReset(gomock.Any()).Return(false).Times(0)
+				mockHostAPI.EXPECT().IsValidMasterCandidate(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(0)
+			})
+
+			It("empty log info (no logs expected or arrived)", func() {
+				clusterApi.ClusterMonitoring()
+				c = geCluster(id, db)
+				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+				Expect(c.LogsInfo).Should(Equal(""))
+			})
+			It("log requested", func() {
+				progress := string(models.LogsStateRequested)
+				_ = clusterApi.UpdateLogsProgress(ctx, &c, progress)
+				clusterApi.ClusterMonitoring()
+				c = geCluster(id, db)
+				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+				Expect(c.LogsInfo).Should(Equal(progress))
+			})
+		})
+
 	})
 
 	AfterEach(func() {

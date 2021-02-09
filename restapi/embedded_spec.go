@@ -3490,6 +3490,17 @@ func init() {
             "description": "The host whose logs should be uploaded.",
             "name": "host_id",
             "in": "query"
+          },
+          {
+            "enum": [
+              "requested",
+              "collecting",
+              "completed"
+            ],
+            "type": "string",
+            "description": "The state of collecting logs.",
+            "name": "logs_state",
+            "in": "query"
           }
         ],
         "responses": {
@@ -4380,6 +4391,11 @@ func init() {
           "format": "date-time",
           "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
         },
+        "controller_logs_started_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
+        },
         "created_at": {
           "description": "The time that this cluster was created.",
           "type": "string",
@@ -4482,6 +4498,11 @@ func init() {
             "AddHostsCluster",
             "AddHostsOCPCluster"
           ]
+        },
+        "logs_info": {
+          "description": "The progress of log collection or empty if logs are not applicable",
+          "type": "string",
+          "x-go-custom-tag": "gorm:\"type:varchar(2048)\""
         },
         "machine_network_cidr": {
           "description": "A CIDR that all hosts belonging to the cluster should have an interfaces with IP address that belongs to this CIDR. The api_vip belongs to this CIDR.",
@@ -5634,6 +5655,16 @@ func init() {
           "format": "datetime",
           "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
         },
+        "logs_info": {
+          "description": "The progress of log collection or empty if logs are not applicable",
+          "type": "string",
+          "x-go-custom-tag": "gorm:\"type:varchar(2048)\""
+        },
+        "logs_started_at": {
+          "type": "string",
+          "format": "datetime",
+          "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
+        },
         "machine_config_pool_name": {
           "type": "string"
         },
@@ -6184,6 +6215,16 @@ func init() {
           "$ref": "#/definitions/versions"
         }
       }
+    },
+    "logs_state": {
+      "type": "string",
+      "enum": [
+        "requested",
+        "collecting",
+        "completed",
+        "timeout",
+        ""
+      ]
     },
     "logs_type": {
       "type": "string",
@@ -10015,6 +10056,17 @@ func init() {
             "description": "The host whose logs should be uploaded.",
             "name": "host_id",
             "in": "query"
+          },
+          {
+            "enum": [
+              "requested",
+              "collecting",
+              "completed"
+            ],
+            "type": "string",
+            "description": "The state of collecting logs.",
+            "name": "logs_state",
+            "in": "query"
           }
         ],
         "responses": {
@@ -11033,6 +11085,11 @@ func init() {
           "format": "date-time",
           "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
         },
+        "controller_logs_started_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
+        },
         "created_at": {
           "description": "The time that this cluster was created.",
           "type": "string",
@@ -11135,6 +11192,11 @@ func init() {
             "AddHostsCluster",
             "AddHostsOCPCluster"
           ]
+        },
+        "logs_info": {
+          "description": "The progress of log collection or empty if logs are not applicable",
+          "type": "string",
+          "x-go-custom-tag": "gorm:\"type:varchar(2048)\""
         },
         "machine_network_cidr": {
           "description": "A CIDR that all hosts belonging to the cluster should have an interfaces with IP address that belongs to this CIDR. The api_vip belongs to this CIDR.",
@@ -12213,6 +12275,16 @@ func init() {
           "format": "datetime",
           "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
         },
+        "logs_info": {
+          "description": "The progress of log collection or empty if logs are not applicable",
+          "type": "string",
+          "x-go-custom-tag": "gorm:\"type:varchar(2048)\""
+        },
+        "logs_started_at": {
+          "type": "string",
+          "format": "datetime",
+          "x-go-custom-tag": "gorm:\"type:timestamp with time zone\""
+        },
         "machine_config_pool_name": {
           "type": "string"
         },
@@ -12764,6 +12836,16 @@ func init() {
           "$ref": "#/definitions/versions"
         }
       }
+    },
+    "logs_state": {
+      "type": "string",
+      "enum": [
+        "requested",
+        "collecting",
+        "completed",
+        "timeout",
+        ""
+      ]
     },
     "logs_type": {
       "type": "string",

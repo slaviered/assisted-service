@@ -10,6 +10,7 @@ const (
 	TransitionTypeResetCluster               = "ResetCluster"
 	TransitionTypePrepareForInstallation     = "PrepareForInstallation"
 	TransitionTypeUpdateInstallationProgress = "UpdateInstallationProgress"
+	TransitionTypeUpdateLogsProgress         = "UpdateLogsProgress"
 	TransitionTypeCompleteInstallation       = "CompleteInstallation"
 	TransitionTypeHandlePreInstallationError = "Handle pre-installation-error"
 	TransitionTypeRefreshStatus              = "RefreshStatus"
@@ -282,12 +283,40 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		})
 	}
 
+	// states relevant for log collection
+	for _, state := range []stateswitch.State{
+		stateswitch.State(models.ClusterStatusInstalling),
+		stateswitch.State(models.ClusterStatusFinalizing),
+		stateswitch.State(models.ClusterStatusInstallingPendingUserAction),
+		stateswitch.State(models.ClusterStatusError),
+		stateswitch.State(models.ClusterStatusCancelled)} {
+		sm.AddTransition(stateswitch.TransitionRule{
+			TransitionType:   TransitionTypeUpdateLogsProgress,
+			SourceStates:     []stateswitch.State{state},
+			DestinationState: state,
+			PostTransition:   th.PostUpdateLogsProgress,
+		})
+	}
+
+	// check timeout of log collection
+	for _, state := range []stateswitch.State{
+		stateswitch.State(models.ClusterStatusError),
+		stateswitch.State(models.ClusterStatusCancelled)} {
+		sm.AddTransition(stateswitch.TransitionRule{
+			TransitionType:   TransitionTypeRefreshStatus,
+			SourceStates:     []stateswitch.State{state},
+			DestinationState: state,
+			Condition:        th.IsLogCollectionTimedOut,
+			PostTransition:   th.PostRefreshLogsProgress(string(models.LogsStateTimeout)),
+		})
+	}
+
 	// Noop transitions
 	for _, state := range []stateswitch.State{
 		stateswitch.State(models.ClusterStatusPreparingForInstallation),
 		stateswitch.State(models.ClusterStatusFinalizing),
 		stateswitch.State(models.ClusterStatusInstalled),
-		stateswitch.State(models.ClusterStatusError),
+		//stateswitch.State(models.ClusterStatusError), //SARAH
 		stateswitch.State(models.ClusterStatusAddingHosts)} {
 		sm.AddTransition(stateswitch.TransitionRule{
 			TransitionType:   TransitionTypeRefreshStatus,

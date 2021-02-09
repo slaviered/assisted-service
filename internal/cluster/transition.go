@@ -73,7 +73,9 @@ func (th *transitionHandler) PostResetCluster(sw stateswitch.StateSwitch, args s
 	}
 
 	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), params.db, sCluster, params.reason,
-		"ControllerLogsCollectedAt", strfmt.DateTime(time.Time{}),
+		"controller_logs_collected_at", strfmt.DateTime(time.Time{}),
+		"controller_logs_started_at", strfmt.DateTime(time.Time{}),
+		"logs_info", "",
 		"OpenshiftClusterID", "", // reset Openshift cluster ID when resetting
 	)
 }
@@ -91,6 +93,7 @@ type TransitionArgsPrepareForInstallation struct {
 
 func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
 	sCluster, ok := sw.(*stateCluster)
+	var err error
 	if !ok {
 		return errors.New("PostPrepareForInstallation incompatible type of StateSwitch")
 	}
@@ -99,15 +102,19 @@ func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwit
 		return errors.New("PostPrepareForInstallation invalid argument")
 	}
 
-	if err := params.manifestsGenerator.AddChronyManifest(params.ctx, logutil.FromContext(params.ctx, th.log), sCluster.cluster); err != nil {
+	if err = params.manifestsGenerator.AddChronyManifest(params.ctx, logutil.FromContext(params.ctx, th.log), sCluster.cluster); err != nil {
 		return errors.Wrap(err, "PostPrepareForInstallation failed to add chrony manifest")
 	}
 
 	sendNTPMetric(logutil.FromContext(params.ctx, th.log), params.metricApi, sCluster.cluster)
 
+	// SARAH - Does it need to be in the same transaction as the update transition
+	sCluster.cluster, err = updateLogsProgress(logutil.FromContext(params.ctx, th.log), th.db, *sCluster.cluster.ID, sCluster.srcState, "")
+	if err != nil {
+		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
+	}
 	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), th.db, sCluster,
-		statusInfoPreparingForInstallation, "install_started_at", strfmt.DateTime(time.Now()),
-		"controller_logs_collected_at", strfmt.DateTime(time.Time{}))
+		statusInfoPreparingForInstallation, "install_started_at", strfmt.DateTime(time.Now()))
 }
 
 func sendNTPMetric(log logrus.FieldLogger, metricApi metrics.API, cluster *common.Cluster) {
@@ -139,6 +146,30 @@ func sendNTPMetric(log logrus.FieldLogger, metricApi metrics.API, cluster *commo
 	}
 
 	metricApi.ClusterHostsNTPFailures(*cluster.ID, cluster.EmailDomain, ntpFailures)
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Update Logs Progress
+////////////////////////////////////////////////////////////////////////////
+
+type TransitionArgsUpdateLogsProgress struct {
+	ctx      context.Context
+	progress string
+}
+
+func (th *transitionHandler) PostUpdateLogsProgress(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
+	sCluster, ok := sw.(*stateCluster)
+
+	if !ok {
+		return errors.New("PostUpdateLogsProgress incompatible type of StateSwitch")
+	}
+	params, ok := args.(*TransitionArgsUpdateLogsProgress)
+	if !ok {
+		return errors.New("PostUpdateLogsProgress invalid argument")
+	}
+	_, err := updateLogsProgress(logutil.FromContext(params.ctx, th.log), th.db, *sCluster.cluster.ID, swag.StringValue(sCluster.cluster.Status),
+		params.progress)
+	return err
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -344,6 +375,7 @@ func (th *transitionHandler) PostRefreshCluster(reason string) stateswitch.PostT
 		if !ok {
 			return errors.New("PostRefreshCluster invalid argument")
 		}
+
 		var (
 			b              []byte
 			err            error
@@ -382,6 +414,52 @@ func (th *transitionHandler) PostRefreshCluster(reason string) stateswitch.PostT
 		return nil
 	}
 	return ret
+}
+
+func (th *transitionHandler) PostRefreshLogsProgress(progress string) stateswitch.PostTransition {
+	return func(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
+		params, ok := args.(*TransitionArgsRefreshCluster)
+		if !ok {
+			return errors.New("PostRefreshCluster invalid argument")
+		}
+		logProgressArgs := TransitionArgsUpdateLogsProgress{
+			ctx:      params.ctx,
+			progress: progress,
+		}
+		return th.PostUpdateLogsProgress(sw, &logProgressArgs)
+	}
+}
+
+//check if log collection on cluster level reached timeout
+func (th *transitionHandler) IsLogCollectionTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sCluster, ok := sw.(*stateCluster)
+	if !ok {
+		return false, errors.New("IsLogCollectionTimedOut incompatible type of StateSwitch")
+	}
+
+	// if we are already in timeout, return true
+	if sCluster.cluster.LogsInfo == string(models.LogsStateTimeout) {
+		return true, nil
+	}
+	// if we transitioned to the state before the logs were collected, check the timeout
+	// from the time the state machine entered the state
+	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) && time.Time(sCluster.cluster.ControllerLogsStartedAt).IsZero() {
+		return time.Since(time.Time(sCluster.cluster.StatusUpdatedAt)) > th.prepareConfig.LogPendingTimeout, nil
+	}
+
+	// if logs started to be collected, but not finished yet, check the timeout
+	// from the the time the logs were expected
+	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) && time.Time(sCluster.cluster.ControllerLogsCollectedAt).IsZero() {
+		return time.Since(time.Time(sCluster.cluster.ControllerLogsStartedAt)) > th.prepareConfig.LogCollectionTimeout, nil
+	}
+
+	// if logs are uploaded but not completed or re-requested (e.g. controller was crashed mid action)
+	// check the timeout from the last time the log were collected
+	if sCluster.cluster.LogsInfo == string(models.LogsStateCollecting) {
+		return time.Since(time.Time(sCluster.cluster.ControllerLogsCollectedAt)) > th.prepareConfig.LogPendingTimeout, nil
+	}
+
+	return false, nil
 }
 
 func setPendingUserResetIfNeeded(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, hostApi host.API, c *common.Cluster) {
