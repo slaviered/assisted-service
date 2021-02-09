@@ -3807,7 +3807,9 @@ func (b *bareMetalInventory) uploadLogs(ctx context.Context, params installer.Up
 
 	defer func() {
 		// Closing file and removing all temporary files created by Multipart
-		params.Upfile.Close()
+		if params.Upfile != nil {
+			params.Upfile.Close()
+		}
 		params.HTTPRequest.Body.Close()
 		err := params.HTTPRequest.MultipartForm.RemoveAll()
 		if err != nil {
@@ -3815,56 +3817,71 @@ func (b *bareMetalInventory) uploadLogs(ctx context.Context, params installer.Up
 		}
 	}()
 
-	if params.LogsType == string(models.LogsTypeHost) {
-		err := b.uploadHostLogs(ctx, params.ClusterID.String(), params.HostID.String(), params.Upfile)
-		if err != nil {
-			return err
+	//SARAH TODO: perhaps define the parameters of type enum and not string to save the conversion
+	var logState models.LogsState = models.LogsStateCollecting //default value for backwards compatability
+	if params.LogsState != nil {
+		switch *params.LogsState {
+		case string(models.LogsStateRequested):
+			logState = models.LogsStateRequested
+		case string(models.LogsStateCompleted):
+			logState = models.LogsStateCompleted
+		default:
+			logState = models.LogsStateCollecting
 		}
-		return nil
+	}
+
+	if params.LogsType == string(models.LogsTypeHost) {
+		err := b.uploadHostLogs(ctx, params.ClusterID.String(), params.HostID.String(), logState, params.Upfile)
+		return err
 	}
 
 	currentCluster, err := b.getCluster(ctx, params.ClusterID.String())
 	if err != nil {
 		return err
 	}
-	fileName := b.getLogsFullName(params.ClusterID.String(), params.LogsType)
-	log.Debugf("Start upload log file %s to bucket %s", fileName, b.S3Bucket)
-	err = b.objectHandler.UploadStream(ctx, params.Upfile, fileName)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to upload %s to s3", fileName)
-		return common.NewApiError(http.StatusInternalServerError, err)
+
+	if params.Upfile != nil {
+		fileName := b.getLogsFullName(params.ClusterID.String(), params.LogsType)
+		log.Debugf("Start upload log file %s to bucket %s", fileName, b.S3Bucket)
+		err = b.objectHandler.UploadStream(ctx, params.Upfile, fileName)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to upload %s to s3", fileName)
+			return common.NewApiError(http.StatusInternalServerError, err)
+		}
+		log.Infof("Done uploading file %s", fileName)
 	}
 	if params.LogsType == string(models.LogsTypeController) {
-		err = b.clusterApi.SetUploadControllerLogsAt(ctx, currentCluster, b.db)
+		err = b.clusterApi.SetUploadControllerLogsAt(ctx, currentCluster, logState, b.db)
 		if err != nil {
-			log.WithError(err).Errorf("Failed update cluster %s controller_logs_collected_at flag", params.ClusterID)
+			log.WithError(err).Errorf("Failed update cluster %s to status %s", params.ClusterID, logState)
 			return common.NewApiError(http.StatusInternalServerError, err)
 		}
 	}
 
-	log.Infof("Done uploading file %s", fileName)
 	return nil
 }
 
-func (b *bareMetalInventory) uploadHostLogs(ctx context.Context, clusterId string, hostId string, upFile io.ReadCloser) error {
+func (b *bareMetalInventory) uploadHostLogs(ctx context.Context, clusterId string, hostId string, logState models.LogsState, upFile io.ReadCloser) error {
 	log := logutil.FromContext(ctx, b.log)
 	currentHost, err := b.getHost(ctx, clusterId, hostId)
 	if err != nil {
 		return err
 	}
 
-	fileName := b.getLogsFullName(clusterId, hostId)
+	if upFile != nil {
+		fileName := b.getLogsFullName(clusterId, hostId)
 
-	log.Debugf("Start upload log file %s to bucket %s", fileName, b.S3Bucket)
-	err = b.objectHandler.UploadStream(ctx, upFile, fileName)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to upload %s to s3 for host %s", fileName, hostId)
-		return common.NewApiError(http.StatusInternalServerError, err)
+		log.Debugf("Start upload log file %s to bucket %s", fileName, b.S3Bucket)
+		err = b.objectHandler.UploadStream(ctx, upFile, fileName)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to upload %s to s3 for host %s", fileName, hostId)
+			return common.NewApiError(http.StatusInternalServerError, err)
+		}
 	}
 
-	err = b.hostApi.SetUploadLogsAt(ctx, currentHost, b.db)
+	err = b.hostApi.SetUploadLogsAt(ctx, currentHost, logState, b.db)
 	if err != nil {
-		log.WithError(err).Errorf("Failed update host %s logs_collected_at flag", hostId)
+		log.WithError(err).Errorf("Failed update host %s to %s status", hostId, logState)
 		return common.NewApiError(http.StatusInternalServerError, err)
 	}
 	return nil
@@ -3891,8 +3908,9 @@ func (b *bareMetalInventory) DownloadClusterLogs(ctx context.Context, params ins
 }
 
 func (b *bareMetalInventory) UploadHostLogs(ctx context.Context, params installer.UploadHostLogsParams) middleware.Responder {
+	logState := string(models.LogsStateCollecting)
 	err := b.uploadLogs(ctx, installer.UploadLogsParams{ClusterID: params.ClusterID, HostID: &params.HostID, HTTPRequest: params.HTTPRequest,
-		LogsType: string(models.LogsTypeHost), Upfile: params.Upfile})
+		LogsType: string(models.LogsTypeHost), LogsState: &logState, Upfile: params.Upfile})
 	if err != nil {
 		return common.GenerateErrorResponder(err)
 	}

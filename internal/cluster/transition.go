@@ -74,6 +74,7 @@ func (th *transitionHandler) PostResetCluster(sw stateswitch.StateSwitch, args s
 
 	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), params.db, sCluster, params.reason,
 		"ControllerLogsCollectedAt", strfmt.DateTime(time.Time{}),
+		"ControllerLogsPendingAt", strfmt.DateTime(time.Time{}),
 		"OpenshiftClusterID", "", // reset Openshift cluster ID when resetting
 	)
 }
@@ -344,6 +345,7 @@ func (th *transitionHandler) PostRefreshCluster(reason string) stateswitch.PostT
 		if !ok {
 			return errors.New("PostRefreshCluster invalid argument")
 		}
+
 		var (
 			b              []byte
 			err            error
@@ -353,8 +355,16 @@ func (th *transitionHandler) PostRefreshCluster(reason string) stateswitch.PostT
 		if err != nil {
 			return err
 		}
+
+		//check if logs collection timed-out
+		logs_timeout, _ := th.IsLogCollectionTimedOut(sw, args)
+
+		additional_info := append(make([]interface{}, 0), "validations_info", string(b))
+		if logs_timeout {
+			additional_info = append(additional_info, "logs_info", string(models.LogsStateTimeout))
+		}
 		updatedCluster, err = updateClusterStatus(logutil.FromContext(params.ctx, th.log), params.db, *sCluster.cluster.ID, sCluster.srcState, *sCluster.cluster.Status,
-			reason, "validations_info", string(b))
+			reason, additional_info...)
 		//update hosts status to models.HostStatusResettingPendingUserAction if needed
 		cluster := sCluster.cluster
 		if updatedCluster != nil {
@@ -383,6 +393,93 @@ func (th *transitionHandler) PostRefreshCluster(reason string) stateswitch.PostT
 	}
 	return ret
 }
+
+var clusterLogCollectionTimeoutStatuses = []string{
+	models.ClusterStatusError,
+	models.ClusterStatusCancelled,
+}
+
+//check if log collection on cluster level reached timeout
+func (th *transitionHandler) IsLogCollectionTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sCluster, ok := sw.(*stateCluster)
+	if !ok {
+		return false, errors.New("IsLogCollectionTimedOut incompatible type of StateSwitch")
+	}
+	// check the timestamps only if we are in statuses relevant to log collection
+	if !funk.ContainsString(clusterLogCollectionTimeoutStatuses, sCluster.srcState) {
+		th.log.Infof("SARAH DEBUG: skip log status calculation with cluster src state %s", sCluster.srcState)
+		return false, nil
+	}
+	// if we are already in timeout, return true
+	if sCluster.cluster.LogsInfo == string(models.LogsStateTimeout) {
+		return true, nil
+	}
+	// if we transitioned to the state before the logs were collected, check the timeout
+	// from the time the state machine entered the state
+	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) && time.Time(sCluster.cluster.ControllerLogsStartedAt).IsZero() {
+		return time.Since(time.Time(sCluster.cluster.StatusUpdatedAt)) > th.prepareConfig.LogPendingTimeout, nil
+	}
+
+	// if logs started to be collected, but not finished yet, check the timeout
+	// from the the time the logs were expected
+	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) {
+		return time.Since(time.Time(sCluster.cluster.ControllerLogsStartedAt)) > th.prepareConfig.LogCollectionTimeout, nil
+	}
+
+	// if logs are uploaded but not completed or re-requested (e.g. controller was crashed mid action)
+	// check the timeout from the last time the log were collected
+	if sCluster.cluster.LogsInfo == string(models.LogsStateCollecting) {
+		return time.Since(time.Time(sCluster.cluster.ControllerLogsCollectedAt)) > th.prepareConfig.LogPendingTimeout, nil
+	}
+
+	return false, nil
+}
+
+/*** SARAH
+func checkLogsStatus(log logrus.FieldLogger, sCluster *stateCluster) string {
+	if !funk.ContainsString(clusterLogCollectionStatuses, sCluster.srcState) {
+		log.Infof("SARAH DEBUG: skip log status calculation with cluster src state %s", sCluster.srcState)
+		return ""
+	}
+
+	var getLogState = func(start time.Time, end time.Time, timeout time.Duration) models.LogsState {
+		if start.IsZero() && end.IsZero() {
+			return models.LogsStateNone
+		}
+		if end.Sub(start) > 0 {
+			return models.LogsStateCompleted
+		}
+		if !start.IsZero() && end.IsZero() && time.Since(start) > timeout {
+			return models.LogsStateTimeout
+		}
+		return models.LogsStateCollecting
+	}
+
+	//check cluster level logs
+	//SARAH TODO: have a separate timestamp for must-gather logs
+	//SARAH TODO: if the output is only aggregated status with no details there is no need for a map
+	logStatusMap := make(map[string]models.LogsState)
+	logStatusMap["controller"] = getLogState(time.Time(sCluster.cluster.ControllerLogsStartedAt), time.Time(sCluster.cluster.ControllerLogsCollectedAt), ClusterLogsTimeout)
+	for _, h := range sCluster.cluster.Hosts {
+		if !funk.ContainsString(hostLogCollectionStatuses, *h.Status) {
+			log.Infof("SARAH DEBUG: skip log status calculation with cluster src state %s", *h.Status)
+			continue
+		}
+		logStatusMap[h.ID.String()] = getLogState(time.Time(h.LogsStartedAt), time.Time(h.LogsCollectedAt), HostLogsTimeout)
+	}
+	b, _ := json.Marshal(logStatusMap)
+	log.Infof("SARAH DEBUG: logs calculation is %s\n", string(b))
+	//
+	//aggregate results
+	values := funk.Values(logStatusMap).([]models.LogsState)
+	if funk.Contains(values, models.LogsStateCollecting) {
+		return string(models.LogsStateCollecting)
+	} else if funk.Contains(values, models.LogsStateCompleted) || funk.Contains(values, models.LogsStateTimeout) {
+		return string(models.LogsStateCompleted)
+	} else { //all non-applicable
+		return "" //do not udpate the log result
+	}
+}***/
 
 func setPendingUserResetIfNeeded(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, hostApi host.API, c *common.Cluster) {
 	if swag.StringValue(c.Status) == models.ClusterStatusInsufficient {

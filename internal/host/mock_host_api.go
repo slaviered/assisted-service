@@ -376,17 +376,17 @@ func (mr *MockAPIMockRecorder) SetBootstrap(arg0, arg1, arg2, arg3 interface{}) 
 }
 
 // SetUploadLogsAt mocks base method
-func (m *MockAPI) SetUploadLogsAt(arg0 context.Context, arg1 *models.Host, arg2 *gorm.DB) error {
+func (m *MockAPI) SetUploadLogsAt(arg0 context.Context, arg1 *models.Host, arg2 models.LogsState, arg3 *gorm.DB) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetUploadLogsAt", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SetUploadLogsAt", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetUploadLogsAt indicates an expected call of SetUploadLogsAt
-func (mr *MockAPIMockRecorder) SetUploadLogsAt(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockAPIMockRecorder) SetUploadLogsAt(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUploadLogsAt", reflect.TypeOf((*MockAPI)(nil).SetUploadLogsAt), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUploadLogsAt", reflect.TypeOf((*MockAPI)(nil).SetUploadLogsAt), arg0, arg1, arg2, arg3)
 }
 
 // UpdateApiVipConnectivityReport mocks base method

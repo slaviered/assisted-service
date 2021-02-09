@@ -91,7 +91,7 @@ type API interface {
 	SetVipsData(ctx context.Context, c *common.Cluster, apiVip, ingressVip, apiVipLease, ingressVipLease string, db *gorm.DB) error
 	IsReadyForInstallation(c *common.Cluster) (bool, string)
 	CreateTarredClusterLogs(ctx context.Context, c *common.Cluster, objectHandler s3wrapper.API) (string, error)
-	SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, db *gorm.DB) error
+	SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, state models.LogsState, db *gorm.DB) error
 	SetConnectivityMajorityGroupsForCluster(clusterID strfmt.UUID, db *gorm.DB) error
 	DeleteClusterLogs(ctx context.Context, c *common.Cluster, objectHandler s3wrapper.API) error
 	DeleteClusterFiles(ctx context.Context, c *common.Cluster, objectHandler s3wrapper.API) error
@@ -100,7 +100,12 @@ type API interface {
 	GetClusterByKubeKey(key types.NamespacedName) (*common.Cluster, error)
 }
 
+type LogTimeoutConfig struct {
+	LogCollectionTimeout time.Duration `envconfig:"LOG_COLLECTION_TIMEOUT" default:"20m"`
+	LogPendingTimeout    time.Duration `envconfig:"LOG_PENDING_TIMEOUT" default:"10m"`
+}
 type PrepareConfig struct {
+	LogTimeoutConfig
 	InstallationTimeout time.Duration `envconfig:"PREPARE_FOR_INSTALLATION_TIMEOUT" default:"10m"`
 }
 
@@ -237,10 +242,30 @@ func (m *Manager) RefreshStatus(ctx context.Context, c *common.Cluster, db *gorm
 
 }
 
-func (m *Manager) SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, db *gorm.DB) error {
-	err := db.Model(c).Update("controller_logs_collected_at", strfmt.DateTime(time.Now())).Error
+func (m *Manager) SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, state models.LogsState, db *gorm.DB) error {
+	var attrs map[string]interface{}
+	switch state {
+	case models.LogsStateRequested:
+		attrs = map[string]interface{}{
+			"controller_logs_started_at": strfmt.DateTime(time.Now()),
+			"logs_info":                  state,
+		}
+	case models.LogsStateCompleted:
+		attrs = map[string]interface{}{
+			"logs_info": state,
+		}
+	case models.LogsStateCollecting:
+		attrs = map[string]interface{}{
+			"controller_logs_collected_at": strfmt.DateTime(time.Now()),
+			"logs_info":                    state,
+		}
+	default: //other logs states are not relevant for updating
+		return nil
+	}
+
+	err := db.Model(c).Update(attrs).Error
 	if err != nil {
-		return errors.Wrapf(err, "failed to set controller_logs_collected_at to cluster %s", c.ID.String())
+		return errors.Wrapf(err, "failed to set %v to cluster %s", attrs, c.ID.String())
 	}
 	return nil
 }
@@ -294,6 +319,12 @@ func (m *Manager) autoAssignMachineNetworkCidrs() error {
 }
 
 func (m *Manager) shouldTriggerLeaseTimeoutEvent(c *common.Cluster, curMonitorInvokedAt time.Time) bool {
+	//SARAH - to be reviewed by michael
+	notAllowedStates := []string{models.ClusterStatusInstalled, models.ClusterStatusError}
+	if funk.Contains(notAllowedStates, *c.Status) {
+		return false
+	}
+	//
 	timeToCompare := c.MachineNetworkCidrUpdatedAt.Add(DhcpLeaseTimeoutMinutes * time.Minute)
 	return swag.BoolValue(c.VipDhcpAllocation) && (c.APIVip == "" || c.IngressVip == "") && c.MachineNetworkCidr != "" &&
 		(m.prevMonitorInvokedAt.Before(timeToCompare) || m.prevMonitorInvokedAt.Equal(timeToCompare)) &&
@@ -302,6 +333,12 @@ func (m *Manager) shouldTriggerLeaseTimeoutEvent(c *common.Cluster, curMonitorIn
 
 func (m *Manager) triggerLeaseTimeoutEvent(ctx context.Context, c *common.Cluster) {
 	m.eventsHandler.AddEvent(ctx, *c.ID, nil, models.EventSeverityWarning, "API and Ingress VIPs lease allocation has been timed out", time.Now())
+}
+
+func (m *Manager) StopMonitoring(c *common.Cluster) bool {
+	stopMonitoringStates := []string{string(models.LogsStateCompleted), string(models.LogsStateTimeout), ""}
+	return (swag.StringValue(c.Status) == models.ClusterStatusError &&
+		funk.Contains(stopMonitoringStates, c.LogsInfo))
 }
 
 func (m *Manager) ClusterMonitoring() {
@@ -330,7 +367,7 @@ func (m *Manager) ClusterMonitoring() {
 	//no need to refresh cluster status if the cluster is in the following statuses
 	noNeedToMonitorInStates := []string{
 		models.ClusterStatusInstalled,
-		models.ClusterStatusError,
+		//models.ClusterStatusError, SARAH - have refresh pn error up until a point
 	}
 
 	for {
@@ -344,25 +381,27 @@ func (m *Manager) ClusterMonitoring() {
 			break
 		}
 		for _, cluster := range clusters {
-			if !m.leaderElector.IsLeader() {
-				m.log.Debugf("Not a leader, exiting ClusterMonitoring")
-				return
-			}
-			if err = m.SetConnectivityMajorityGroupsForCluster(*cluster.ID, m.db); err != nil {
-				log.WithError(err).Errorf("failed to set majority group for cluster %s", cluster.ID.String())
-			}
-			if clusterAfterRefresh, err = m.RefreshStatus(ctx, cluster, m.db); err != nil {
-				log.WithError(err).Errorf("failed to refresh cluster %s state", cluster.ID)
-				continue
-			}
+			if !m.StopMonitoring(cluster) {
+				if !m.leaderElector.IsLeader() {
+					m.log.Debugf("Not a leader, exiting ClusterMonitoring")
+					return
+				}
+				if err = m.SetConnectivityMajorityGroupsForCluster(*cluster.ID, m.db); err != nil {
+					log.WithError(err).Errorf("failed to set majority group for cluster %s", cluster.ID.String())
+				}
+				if clusterAfterRefresh, err = m.RefreshStatus(ctx, cluster, m.db); err != nil {
+					log.WithError(err).Errorf("failed to refresh cluster %s state", cluster.ID)
+					continue
+				}
 
-			if swag.StringValue(clusterAfterRefresh.Status) != swag.StringValue(cluster.Status) {
-				log.Infof("cluster %s updated status from %s to %s via monitor", cluster.ID,
-					swag.StringValue(cluster.Status), swag.StringValue(clusterAfterRefresh.Status))
-			}
+				if swag.StringValue(clusterAfterRefresh.Status) != swag.StringValue(cluster.Status) {
+					log.Infof("cluster %s updated status from %s to %s via monitor", cluster.ID,
+						swag.StringValue(cluster.Status), swag.StringValue(clusterAfterRefresh.Status))
+				}
 
-			if m.shouldTriggerLeaseTimeoutEvent(cluster, curMonitorInvokedAt) {
-				m.triggerLeaseTimeoutEvent(ctx, cluster)
+				if m.shouldTriggerLeaseTimeoutEvent(cluster, curMonitorInvokedAt) {
+					m.triggerLeaseTimeoutEvent(ctx, cluster)
+				}
 			}
 		}
 		offset += limit

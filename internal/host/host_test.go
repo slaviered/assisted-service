@@ -1592,6 +1592,80 @@ var _ = Describe("UpdateMachineConfigPoolName", func() {
 	})
 })
 
+var _ = Describe("update logs_info", func() {
+	var (
+		ctx               = context.Background()
+		db                *gorm.DB
+		hapi              API
+		host              models.Host
+		hostId, clusterId strfmt.UUID
+		dbName            = "host_update_logs_info"
+	)
+
+	BeforeEach(func() {
+		dummy := &leader.DummyElector{}
+		db = common.PrepareTestDB(dbName, &events.Event{})
+		hapi = NewManager(common.GetTestLog(), db, nil, nil, nil, createValidatorCfg(), nil, defaultConfig, dummy)
+		hostId = strfmt.UUID(uuid.New().String())
+		clusterId = strfmt.UUID(uuid.New().String())
+		host = hostutil.GenerateTestHost(hostId, clusterId, models.HostStatusInstallingInProgress)
+		Expect(db.Create(&host).Error).ShouldNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		common.DeleteTestDB(db, dbName)
+	})
+
+	validateLogsStartedAt := func() {
+		Expect(host.LogsStartedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
+	}
+
+	validateLogsCollectedAt := func() {
+		Expect(host.LogsCollectedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
+	}
+
+	validateCollectedAtNotUpdated := func() {
+		Expect(host.LogsCollectedAt).To(Equal(strfmt.DateTime(time.Time{})))
+	}
+
+	tests := []struct {
+		name              string
+		logstate          models.LogsState
+		logsInfo          string
+		validateTimestamp func()
+	}{
+		{
+			name:              "log collection started",
+			logstate:          models.LogsStateRequested,
+			logsInfo:          string(models.LogsStateRequested),
+			validateTimestamp: validateLogsStartedAt,
+		},
+		{
+			name:              "log collecting",
+			logstate:          models.LogsStateCollecting,
+			logsInfo:          string(models.LogsStateCollecting),
+			validateTimestamp: validateLogsCollectedAt,
+		},
+		{
+			name:              "log collecting completed",
+			logstate:          models.LogsStateCompleted,
+			logsInfo:          string(models.LogsStateCompleted),
+			validateTimestamp: validateCollectedAtNotUpdated,
+		},
+	}
+
+	for i := range tests {
+		t := tests[i]
+		It(t.name, func() {
+			err := hapi.SetUploadLogsAt(ctx, &host, t.logstate, db)
+			Expect(err).ShouldNot(HaveOccurred())
+			h := hostutil.GetHostFromDB(hostId, clusterId, db)
+			Expect(h.LogsInfo).To(Equal(t.logsInfo))
+			t.validateTimestamp()
+		})
+	}
+})
+
 var _ = Describe("UpdateImageStatus", func() {
 	var (
 		ctx               = context.Background()

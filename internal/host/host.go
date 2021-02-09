@@ -79,7 +79,13 @@ var InstallationTimeout = 20 * time.Minute
 
 var MaxHostDisconnectionTime = 3 * time.Minute
 
+type LogTimeoutConfig struct {
+	LogCollectionTimeout time.Duration `envconfig:"HOST_LOG_COLLECTION_TIMEOUT" default:"5m"`
+	LogPendingTimeout    time.Duration `envconfig:"HOST_LOG_PENDING_TIMEOUT" default:"2m"`
+}
+
 type Config struct {
+	LogTimeoutConfig
 	EnableAutoReset  bool          `envconfig:"ENABLE_AUTO_RESET" default:"false"`
 	ResetTimeout     time.Duration `envconfig:"RESET_CLUSTER_TIMEOUT" default:"3m"`
 	MonitorBatchSize int           `envconfig:"HOST_MONITOR_BATCH_SIZE" default:"100"`
@@ -115,7 +121,7 @@ type API interface {
 	// auto assign host role
 	AutoAssignRole(ctx context.Context, h *models.Host, db *gorm.DB) error
 	IsValidMasterCandidate(h *models.Host, db *gorm.DB, log logrus.FieldLogger) (bool, error)
-	SetUploadLogsAt(ctx context.Context, h *models.Host, db *gorm.DB) error
+	SetUploadLogsAt(ctx context.Context, h *models.Host, state models.LogsState, db *gorm.DB) error
 	GetHostRequirements(role models.HostRole) models.HostRequirementsRole
 	PermanentHostsDeletion(olderThen strfmt.DateTime) error
 	ReportValidationFailedMetrics(ctx context.Context, h *models.Host, ocpVersion, emailDomain string) error
@@ -445,10 +451,29 @@ func (m *Manager) SetBootstrap(ctx context.Context, h *models.Host, isbootstrap 
 	return nil
 }
 
-func (m *Manager) SetUploadLogsAt(ctx context.Context, h *models.Host, db *gorm.DB) error {
-	err := db.Model(h).Update("logs_collected_at", strfmt.DateTime(time.Now())).Error
+func (m *Manager) SetUploadLogsAt(ctx context.Context, h *models.Host, state models.LogsState, db *gorm.DB) error {
+	var attrs map[string]interface{}
+	switch state {
+	case models.LogsStateRequested:
+		attrs = map[string]interface{}{
+			"logs_started_at": strfmt.DateTime(time.Now()),
+			"logs_info":       state,
+		}
+	case models.LogsStateCompleted:
+		attrs = map[string]interface{}{
+			"logs_info": state,
+		}
+	case models.LogsStateCollecting:
+		attrs = map[string]interface{}{
+			"logs_collected_at": strfmt.DateTime(time.Now()),
+			"logs_info":         state,
+		}
+	default: //other logs states are not relevant for updating
+		return nil
+	}
+	err := db.Model(h).Update(attrs).Error
 	if err != nil {
-		return errors.Wrapf(err, "failed to set logs_collected_at to host %s", h.ID.String())
+		return errors.Wrapf(err, "failed to set %v to host %s", attrs, h.ID.String())
 	}
 	return nil
 }

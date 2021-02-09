@@ -10,6 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	gorm "github.com/jinzhu/gorm"
 	common "github.com/openshift/assisted-service/internal/common"
+	models "github.com/openshift/assisted-service/models"
 	s3wrapper "github.com/openshift/assisted-service/pkg/s3wrapper"
 	types "k8s.io/apimachinery/pkg/types"
 	reflect "reflect"
@@ -450,17 +451,17 @@ func (mr *MockAPIMockRecorder) CreateTarredClusterLogs(ctx, c, objectHandler int
 }
 
 // SetUploadControllerLogsAt mocks base method
-func (m *MockAPI) SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, db *gorm.DB) error {
+func (m *MockAPI) SetUploadControllerLogsAt(ctx context.Context, c *common.Cluster, state models.LogsState, db *gorm.DB) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetUploadControllerLogsAt", ctx, c, db)
+	ret := m.ctrl.Call(m, "SetUploadControllerLogsAt", ctx, c, state, db)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetUploadControllerLogsAt indicates an expected call of SetUploadControllerLogsAt
-func (mr *MockAPIMockRecorder) SetUploadControllerLogsAt(ctx, c, db interface{}) *gomock.Call {
+func (mr *MockAPIMockRecorder) SetUploadControllerLogsAt(ctx, c, state, db interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUploadControllerLogsAt", reflect.TypeOf((*MockAPI)(nil).SetUploadControllerLogsAt), ctx, c, db)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUploadControllerLogsAt", reflect.TypeOf((*MockAPI)(nil).SetUploadControllerLogsAt), ctx, c, state, db)
 }
 
 // SetConnectivityMajorityGroupsForCluster mocks base method

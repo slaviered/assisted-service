@@ -2285,6 +2285,12 @@ paths:
           type: string
           format: uuid
           required: false
+        - in: query
+          name: logs_state
+          description: The state of collecting logs - default state assumed to be collecting.
+          type: string
+          enum: ['requested', 'collecting', 'completed']
+          required: false
       responses:
         "204":
           description: Success.
@@ -3030,6 +3036,10 @@ definitions:
         type: string
         description: JSON-formatted string containing the validation results for each validation id grouped by category (network, hardware, etc.)
         x-go-custom-tag: gorm:"type:varchar(2048)"
+      logs_info:
+        type: string
+        description: SARAH TODO - is it reference to logs_state or something else or we'll use validation_info instead
+        x-go-custom-tag: gorm:"type:varchar(2048)"
       status_updated_at:
         type: string
         format: date-time
@@ -3074,6 +3084,10 @@ definitions:
       bootstrap:
         type: boolean
       logs_collected_at:
+        type: string
+        format: datetime
+        x-go-custom-tag: gorm:"type:timestamp with time zone"
+      logs_started_at:
         type: string
         format: datetime
         x-go-custom-tag: gorm:"type:timestamp with time zone"
@@ -3644,6 +3658,10 @@ definitions:
         type: string
         description: JSON-formatted string containing the validation results for each validation id grouped by category (network, hosts-data, etc.)
         x-go-custom-tag: gorm:"type:varchar(2048)"
+      logs_info:
+        type: string
+        description: SARAH TODO - is it reference to logs_state or something else or we'll use validation_info instead
+        x-go-custom-tag: gorm:"type:varchar(2048)"
       install_config_overrides:
         x-go-custom-tag: gorm:"type:text"
         type: string
@@ -3655,6 +3673,10 @@ definitions:
         description: Json formatted string containing the user overrides for the initial ignition config
         example: '{"ignition": {"version": "3.1.0"}, "storage": {"files": [{"path": "/tmp/example", "contents": {"source": "data:text/plain;base64,aGVscGltdHJhcHBlZGluYXN3YWdnZXJzcGVj"}}]}}'
       controller_logs_collected_at:
+        type: string
+        format: date-time
+        x-go-custom-tag: gorm:"type:timestamp with time zone"
+      controller_logs_started_at:
         type: string
         format: date-time
         x-go-custom-tag: gorm:"type:timestamp with time zone"
@@ -4414,6 +4436,15 @@ definitions:
       - 'controller'
       - 'all'
       - ''
+
+  logs_state:
+    type: string
+    enum:
+      - 'none'
+      - 'requested'
+      - 'collecting'
+      - 'completed'
+      - 'timeout'
 
   operators:
     type: array

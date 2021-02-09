@@ -521,6 +521,47 @@ var _ = Describe("TestClusterMonitoring", func() {
 		})
 	})
 
+	Context("monitoring log info", func() {
+		//SARAH - move this to the end of the master context
+		Context("error -> error", func() {
+			var (
+				ctx = context.Background()
+			)
+
+			BeforeEach(func() {
+				c = common.Cluster{Cluster: models.Cluster{
+					ID:                 &id,
+					Status:             swag.String("error"),
+					StatusInfo:         swag.String(statusInfoError),
+					MachineNetworkCidr: "1.1.0.0/16",
+					BaseDNSDomain:      "test.com",
+					PullSecretSet:      true,
+				}}
+
+				Expect(db.Create(&c).Error).ShouldNot(HaveOccurred())
+				Expect(err).ShouldNot(HaveOccurred())
+				mockEvents.EXPECT().AddEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				mockHostAPI.EXPECT().IsRequireUserActionReset(gomock.Any()).Return(false).Times(0)
+				mockHostAPI.EXPECT().IsValidMasterCandidate(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(0)
+			})
+
+			It("empty log info (no logs expected or arrived)", func() {
+				clusterApi.ClusterMonitoring()
+				c = geCluster(id, db)
+				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+				Expect(c.LogsInfo).Should(Equal(""))
+			})
+			FIt("log requested", func() {
+				_ = clusterApi.SetUploadControllerLogsAt(ctx, &c, models.LogsStateRequested, db)
+				clusterApi.ClusterMonitoring()
+				c = geCluster(id, db)
+				Expect(swag.StringValue(c.Status)).Should(Equal(models.ClusterStatusError))
+				Expect(c.LogsInfo).Should(Equal(string(models.LogsStateRequested)))
+			})
+		})
+
+	})
+
 	AfterEach(func() {
 		common.DeleteTestDB(db, dbName)
 		ctrl.Finish()

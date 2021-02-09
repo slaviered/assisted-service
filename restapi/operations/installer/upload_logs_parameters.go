@@ -42,6 +42,10 @@ type UploadLogsParams struct {
 	  In: query
 	*/
 	HostID *strfmt.UUID
+	/*The state of collecting logs - default state assumed to be collecting.
+	  In: query
+	*/
+	LogsState *string
 	/*The type of log file to be uploaded.
 	  Required: true
 	  In: query
@@ -80,6 +84,11 @@ func (o *UploadLogsParams) BindRequest(r *http.Request, route *middleware.Matche
 
 	qHostID, qhkHostID, _ := qs.GetOK("host_id")
 	if err := o.bindHostID(qHostID, qhkHostID, route.Formats); err != nil {
+		res = append(res, err)
+	}
+
+	qLogsState, qhkLogsState, _ := qs.GetOK("logs_state")
+	if err := o.bindLogsState(qLogsState, qhkLogsState, route.Formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -171,6 +180,38 @@ func (o *UploadLogsParams) validateHostID(formats strfmt.Registry) error {
 	if err := validate.FormatOf("host_id", "query", "uuid", o.HostID.String(), formats); err != nil {
 		return err
 	}
+	return nil
+}
+
+// bindLogsState binds and validates parameter LogsState from query.
+func (o *UploadLogsParams) bindLogsState(rawData []string, hasKey bool, formats strfmt.Registry) error {
+	var raw string
+	if len(rawData) > 0 {
+		raw = rawData[len(rawData)-1]
+	}
+
+	// Required: false
+	// AllowEmptyValue: false
+	if raw == "" { // empty values pass all other validations
+		return nil
+	}
+
+	o.LogsState = &raw
+
+	if err := o.validateLogsState(formats); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateLogsState carries on validations for parameter LogsState
+func (o *UploadLogsParams) validateLogsState(formats strfmt.Registry) error {
+
+	if err := validate.EnumCase("logs_state", "query", *o.LogsState, []interface{}{"requested", "collecting", "completed"}, true); err != nil {
+		return err
+	}
+
 	return nil
 }
 

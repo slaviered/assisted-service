@@ -90,6 +90,13 @@ type Host struct {
 	// Format: datetime
 	LogsCollectedAt strfmt.DateTime `json:"logs_collected_at,omitempty" gorm:"type:timestamp with time zone"`
 
+	// SARAH TODO - is it reference to logs_state or something else or we'll use validation_info instead
+	LogsInfo string `json:"logs_info,omitempty" gorm:"type:varchar(2048)"`
+
+	// logs started at
+	// Format: datetime
+	LogsStartedAt strfmt.DateTime `json:"logs_started_at,omitempty" gorm:"type:timestamp with time zone"`
+
 	// machine config pool name
 	MachineConfigPoolName string `json:"machine_config_pool_name,omitempty"`
 
@@ -173,6 +180,10 @@ func (m *Host) Validate(formats strfmt.Registry) error {
 	}
 
 	if err := m.validateLogsCollectedAt(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateLogsStartedAt(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -345,6 +356,19 @@ func (m *Host) validateLogsCollectedAt(formats strfmt.Registry) error {
 	}
 
 	if err := validate.FormatOf("logs_collected_at", "body", "datetime", m.LogsCollectedAt.String(), formats); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Host) validateLogsStartedAt(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.LogsStartedAt) { // not required
+		return nil
+	}
+
+	if err := validate.FormatOf("logs_started_at", "body", "datetime", m.LogsStartedAt.String(), formats); err != nil {
 		return err
 	}
 
