@@ -18,8 +18,9 @@ import (
 type UploadLogsURL struct {
 	ClusterID strfmt.UUID
 
-	HostID   *strfmt.UUID
-	LogsType string
+	HostID    *strfmt.UUID
+	LogsState *string
+	LogsType  string
 
 	_basePath string
 	// avoid unkeyed usage
@@ -68,6 +69,14 @@ func (o *UploadLogsURL) Build() (*url.URL, error) {
 	}
 	if hostIDQ != "" {
 		qs.Set("host_id", hostIDQ)
+	}
+
+	var logsStateQ string
+	if o.LogsState != nil {
+		logsStateQ = *o.LogsState
+	}
+	if logsStateQ != "" {
+		qs.Set("logs_state", logsStateQ)
 	}
 
 	logsTypeQ := o.LogsType

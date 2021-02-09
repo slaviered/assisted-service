@@ -3,9 +3,17 @@ package host
 import (
 	"context"
 
+	"github.com/go-openapi/swag"
 	"github.com/openshift/assisted-service/models"
 	"github.com/openshift/assisted-service/pkg/requestid"
+	"github.com/thoas/go-funk"
 )
+
+func (m *Manager) StopMonitoring(h *models.Host) bool {
+	stopMonitoringStates := []string{string(models.LogsStateCompleted), string(models.LogsStateTimeout), ""}
+	return ((swag.StringValue(h.Status) == models.HostStatusError || swag.StringValue(h.Status) == models.HostStatusCancelled) &&
+		funk.Contains(stopMonitoringStates, h.LogsInfo))
+}
 
 func (m *Manager) HostMonitoring() {
 	if !m.leaderElector.IsLeader() {
@@ -46,12 +54,14 @@ func (m *Manager) HostMonitoring() {
 			break
 		}
 		for _, host := range hosts {
-			if !m.leaderElector.IsLeader() {
-				m.log.Debugf("Not a leader, exiting HostMonitoring")
-				return
-			}
-			if err := m.RefreshStatus(ctx, host, m.db); err != nil {
-				log.WithError(err).Errorf("failed to refresh host %s state", *host.ID)
+			if !m.StopMonitoring(host) {
+				if !m.leaderElector.IsLeader() {
+					m.log.Debugf("Not a leader, exiting HostMonitoring")
+					return
+				}
+				if err := m.RefreshStatus(ctx, host, m.db); err != nil {
+					log.WithError(err).Errorf("failed to refresh host %s state", *host.ID)
+				}
 			}
 		}
 		offset += limit

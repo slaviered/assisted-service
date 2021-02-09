@@ -28,6 +28,27 @@ func UpdateHostProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB
 	return UpdateHostStatus(ctx, log, db, eventsHandler, clusterId, hostId, srcStatus, newStatus, statusInfo, extra...)
 }
 
+func UpdateLogsProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, eventsHandler events.Handler, clusterId strfmt.UUID, hostId strfmt.UUID, srcStatus string, progress string, extra ...interface{}) (*models.Host, error) {
+	var host *models.Host
+	var err error
+
+	extra = append(append(make([]interface{}, 0), "logs_info", progress), extra...)
+	switch progress {
+	case "":
+		//clean all timestamps (invoked before install started to clean up the previous information)
+		extra = append(append(extra, "logs_started_at", strfmt.DateTime(time.Time{})),
+			"logs_collected_at", strfmt.DateTime(time.Time{}))
+	case string(models.LogsStateRequested):
+		extra = append(extra, "logs_started_at", strfmt.DateTime(time.Now()))
+	}
+
+	if host, err = UpdateHost(log, db, clusterId, hostId, srcStatus, extra...); err != nil {
+		return nil, err
+	}
+	log.Infof("host %s has been updated with the following log progress %+v", hostId, extra)
+	return host, nil
+}
+
 func UpdateHostStatus(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, eventsHandler events.Handler, clusterId strfmt.UUID, hostId strfmt.UUID,
 	srcStatus string, newStatus string, statusInfo string, extra ...interface{}) (*models.Host, error) {
 	var host *models.Host

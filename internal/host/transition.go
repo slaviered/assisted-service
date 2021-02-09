@@ -26,6 +26,7 @@ import (
 type transitionHandler struct {
 	db            *gorm.DB
 	log           logrus.FieldLogger
+	config        *Config
 	eventsHandler events.Handler
 }
 
@@ -361,6 +362,13 @@ type TransitionArgsPrepareForInstallation struct {
 func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
 	sHost, _ := sw.(*stateHost)
 	params, _ := args.(*TransitionArgsPrepareForInstallation)
+	var err error
+
+	// SARAH - Does it need to be in the same transaction as the update transition
+	sHost.host, err = hostutil.UpdateLogsProgress(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, th.eventsHandler, sHost.host.ClusterID, *sHost.host.ID, sHost.srcState, "")
+	if err != nil {
+		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
+	}
 	return th.updateTransitionHost(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, sHost,
 		statusInfoPreparingForInstallation, "logs_collected_at", strfmt.DateTime(time.Time{}))
 }
@@ -436,6 +444,55 @@ func (th *transitionHandler) HasClusterError(sw stateswitch.StateSwitch, args st
 		return false, err
 	}
 	return swag.StringValue(cluster.Status) == models.ClusterStatusError, nil
+}
+
+func (th *transitionHandler) PostRefreshLogsProgress(progress string) stateswitch.PostTransition {
+	ret := func(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
+		sHost, ok := sw.(*stateHost)
+		if !ok {
+			return errors.New("PostRefreshLogsProgress incompatible type of StateSwitch")
+		}
+		params, ok := args.(*TransitionArgsRefreshHost)
+		if !ok {
+			return errors.New("PostRefreshLogsProgress invalid argument")
+		}
+		_, err := hostutil.UpdateLogsProgress(params.ctx, logutil.FromContext(params.ctx, th.log),
+			params.db, th.eventsHandler, sHost.host.ClusterID, *sHost.host.ID, sHost.srcState, progress)
+		return err
+	}
+	return ret
+}
+
+//check if log collection on cluster level reached timeout
+func (th *transitionHandler) IsLogCollectionTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
+	sHost, ok := sw.(*stateHost)
+	if !ok {
+		return false, errors.New("IsLogCollectionTimedOut incompatible type of StateSwitch")
+	}
+
+	// if we are already in timeout, return true
+	if sHost.host.LogsInfo == string(models.LogsStateTimeout) {
+		return true, nil
+	}
+	// if we transitioned to the state before the logs were collected, check the timeout
+	// from the time the state machine entered the state
+	if sHost.host.LogsInfo == string(models.LogsStateRequested) && time.Time(sHost.host.LogsStartedAt).IsZero() {
+		return time.Since(time.Time(sHost.host.StatusUpdatedAt)) > th.config.LogPendingTimeout, nil
+	}
+
+	// if logs started to be collected, but not finished yet, check the timeout
+	// from the the time the logs were expected
+	if sHost.host.LogsInfo == string(models.LogsStateRequested) && time.Time(sHost.host.LogsCollectedAt).IsZero() {
+		return time.Since(time.Time(sHost.host.LogsStartedAt)) > th.config.LogCollectionTimeout, nil
+	}
+
+	// if logs are uploaded but not completed or re-requested (e.g. controller was crashed mid action)
+	// check the timeout from the last time the log were collected
+	if sHost.host.LogsInfo == string(models.LogsStateCollecting) {
+		return time.Since(time.Time(sHost.host.LogsCollectedAt)) > th.config.LogPendingTimeout, nil
+	}
+
+	return false, nil
 }
 
 func (th *transitionHandler) HasInstallationTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
