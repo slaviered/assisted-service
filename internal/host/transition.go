@@ -362,17 +362,10 @@ type TransitionArgsPrepareForInstallation struct {
 func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
 	sHost, _ := sw.(*stateHost)
 	params, _ := args.(*TransitionArgsPrepareForInstallation)
-	var err error
 
-	// SARAH - Does it need to be in the same transaction as the update transition
-	sHost.host, err = hostutil.UpdateLogsProgress(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, th.eventsHandler, sHost.host.ClusterID, *sHost.host.ID, sHost.srcState, "")
-	if err != nil {
-		th.log.Info("SARAH DEBUG => failed PostPrepareForInstallation failed to clean log progress and timestamps %v", err)
-		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
-	}
 	//SARAH DEBUG
-	err = th.updateTransitionHost(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, sHost,
-		statusInfoPreparingForInstallation, "logs_collected_at", strfmt.DateTime(time.Time{}))
+	err := th.updateTransitionHost(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, sHost,
+		statusInfoPreparingForInstallation, hostutil.ResetLogsField...)
 	th.log.Info("SARAH DEBUG => updateTransitionHost to statusInfoPreparingForInstallation %v", err)
 	return err
 }
