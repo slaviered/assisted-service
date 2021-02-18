@@ -22,6 +22,8 @@ import (
 	"github.com/thoas/go-funk"
 )
 
+var resetLogsField = []interface{}{"logs_info", "", "controller_logs_started_at", strfmt.DateTime(time.Time{}), "controller_logs_collected_at", strfmt.DateTime(time.Time{})}
+
 type transitionHandler struct {
 	log           logrus.FieldLogger
 	db            *gorm.DB
@@ -72,12 +74,9 @@ func (th *transitionHandler) PostResetCluster(sw stateswitch.StateSwitch, args s
 		return errors.New("PostResetCluster invalid argument")
 	}
 
-	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), params.db, sCluster, params.reason,
-		"controller_logs_collected_at", strfmt.DateTime(time.Time{}),
-		"controller_logs_started_at", strfmt.DateTime(time.Time{}),
-		"logs_info", "",
-		"OpenshiftClusterID", "", // reset Openshift cluster ID when resetting
-	)
+	//reset log fields and Openshift ClusterID when resetting the cluster
+	extra := append(append(make([]interface{}, 0), "OpenshiftClusterID", ""), resetLogsField...)
+	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), params.db, sCluster, params.reason, extra...)
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -108,15 +107,10 @@ func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwit
 
 	sendNTPMetric(logutil.FromContext(params.ctx, th.log), params.metricApi, sCluster.cluster)
 
-	// SARAH - Does it need to be in the same transaction as the update transition
-	sCluster.cluster, err = updateLogsProgress(logutil.FromContext(params.ctx, th.log), th.db, *sCluster.cluster.ID, sCluster.srcState, "")
-	if err != nil {
-		th.log.Infof("SARAH DEBUG => update progress PostPrepareForInstallation failed %v", err)
-		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
-	}
 	//SARAH DEBUG
+	extra := append(append(make([]interface{}, 0), "install_started_at", strfmt.DateTime(time.Now())), resetLogsField...)
 	err = th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), th.db, sCluster,
-		statusInfoPreparingForInstallation, "install_started_at", strfmt.DateTime(time.Now()))
+		statusInfoPreparingForInstallation, extra...)
 	th.log.Infof("SARAH DEBUG => update transition in PostPrepareForInstallation %v", err)
 	return err
 }

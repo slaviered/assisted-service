@@ -3830,7 +3830,7 @@ func (b *bareMetalInventory) UploadLogs(ctx context.Context, params installer.Up
 
 func (b *bareMetalInventory) uploadLogs(ctx context.Context, params installer.UploadLogsParams) error {
 	log := logutil.FromContext(ctx, b.log)
-	log.Infof("Uploading logs from host %s in cluster %s", params.HostID, params.ClusterID)
+	log.Infof("Uploading logs from host %s in cluster %s with type %s and progress %s", params.HostID, params.ClusterID, params.LogsType, swag.StringValue(params.LogsState))
 
 	defer func() {
 		// Closing file and removing all temporary files created by Multipart

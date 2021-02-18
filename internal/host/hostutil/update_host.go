@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var ResetLogsField = []interface{}{"logs_info", "", "logs_started_at", strfmt.DateTime(time.Time{}), "logs_collected_at", strfmt.DateTime(time.Time{})}
+
 func UpdateHostProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, eventsHandler events.Handler, clusterId strfmt.UUID, hostId strfmt.UUID,
 	srcStatus string, newStatus string, statusInfo string,
 	srcStage models.HostStage, newStage models.HostStage, progressInfo string, extra ...interface{}) (*models.Host, error) {
@@ -32,14 +34,13 @@ func UpdateLogsProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB
 	var host *models.Host
 	var err error
 
-	extra = append(append(make([]interface{}, 0), "logs_info", progress), extra...)
 	switch progress {
 	case "":
 		//clean all timestamps (invoked before install started to clean up the previous information)
-		extra = append(append(extra, "logs_started_at", strfmt.DateTime(time.Time{})),
-			"logs_collected_at", strfmt.DateTime(time.Time{}))
+		extra = append(append(make([]interface{}, 0), ResetLogsField...), extra...)
 	case string(models.LogsStateRequested):
-		extra = append(extra, "logs_started_at", strfmt.DateTime(time.Now()))
+		extra = append(append(append(make([]interface{}, 0), "logs_info", progress),
+			"logs_started_at", strfmt.DateTime(time.Now())), extra...)
 	}
 
 	if host, err = UpdateHost(log, db, clusterId, hostId, srcStatus, extra...); err != nil {

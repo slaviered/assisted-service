@@ -90,14 +90,10 @@ func updateLogsProgress(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.UU
 	var cluster *common.Cluster
 	var err error
 
-	extra = append(append(make([]interface{}, 0), "logs_info", progress), extra...)
 	switch progress {
-	case "":
-		//clean all timestamps (invoked before install started to clean up the previous information)
-		extra = append(append(extra, "controller_logs_started_at", strfmt.DateTime(time.Time{})),
-			"controller_logs_collected_at", strfmt.DateTime(time.Time{}))
 	case string(models.LogsStateRequested):
-		extra = append(extra, "controller_logs_started_at", strfmt.DateTime(time.Now()))
+		extra = append(append(append(make([]interface{}, 0), "logs_info", progress),
+			"logs_started_at", strfmt.DateTime(time.Now())), extra...)
 	}
 
 	if cluster, err = UpdateCluster(log, db, clusterId, srcStatus, extra...); err != nil {

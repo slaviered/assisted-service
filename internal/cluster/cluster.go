@@ -476,7 +476,7 @@ func (m *Manager) CancelInstallation(ctx context.Context, c *common.Cluster, rea
 
 func (m *Manager) UpdateLogsProgress(ctx context.Context, c *common.Cluster, progress string) error {
 	//SARAH TODO - where to emit event and metrics?
-	m.log.Info("SARAH DEBUG => Enter UpdateLogsProgress")
+	m.log.Infof("SARAH DEBUG => Cluster Enter UpdateLogsProgress %s", progress)
 	err := m.sm.Run(TransitionTypeUpdateLogsProgress, newStateCluster(c), &TransitionArgsUpdateLogsProgress{
 		ctx:      ctx,
 		progress: progress,
