@@ -456,12 +456,14 @@ func (m *Manager) UpdateLogsProgress(ctx context.Context, h *models.Host, progre
 	//SARAH TODO: where to put events?
 	_, err := hostutil.UpdateLogsProgress(ctx, logutil.FromContext(ctx, m.log), m.db, m.eventsHandler, h.ClusterID, *h.ID,
 		swag.StringValue(h.Status), progress)
+	m.log.Info("SARAH DEBUG => UpdateLogsProgress on host err=%v", err)
 	return err
 }
 
 func (m *Manager) SetUploadLogsAt(ctx context.Context, h *models.Host, db *gorm.DB) error {
 	err := db.Model(h).Update("logs_collected_at", strfmt.DateTime(time.Now())).Error
 	if err != nil {
+		m.log.Error("SARAH DEBUG => SetUploadLogsAt on host err=%v", err)
 		return errors.Wrapf(err, "failed to set logs_collected_at to host %s", h.ID.String())
 	}
 	return nil

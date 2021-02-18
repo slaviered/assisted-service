@@ -40,7 +40,7 @@ func updateClusterStatus(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.U
 	newStatus string, statusInfo string, extra ...interface{}) (*common.Cluster, error) {
 	var cluster *common.Cluster
 	var err error
-
+	log.Infof("SARAH DEBUG => Tx Cluster from %s to %s", srcStatus, newStatus)
 	extra = append(append(make([]interface{}, 0), "status", newStatus, "status_info", statusInfo), extra...)
 
 	if newStatus != srcStatus {
@@ -55,6 +55,7 @@ func updateClusterStatus(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.U
 
 	if cluster, err = UpdateCluster(log, db, clusterId, srcStatus, extra...); err != nil ||
 		swag.StringValue(cluster.Status) != newStatus {
+		log.Errorf("SARAH DEBUG => failed to update cluster from %s to %s %v", srcStatus, newStatus, err)
 		return nil, errors.Wrapf(err, "failed to update cluster %s state from %s to %s",
 			clusterId, srcStatus, newStatus)
 	}
@@ -100,6 +101,7 @@ func updateLogsProgress(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.UU
 	}
 
 	if cluster, err = UpdateCluster(log, db, clusterId, srcStatus, extra...); err != nil {
+		log.Errorf("SARAH DEBUG => UpdateCluster failed in updaeLogProgress %v", err)
 		return nil, err
 	}
 

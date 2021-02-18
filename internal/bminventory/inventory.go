@@ -1342,6 +1342,7 @@ func (b *bareMetalInventory) storeOpenshiftClusterID(ctx context.Context, cluste
 func (b *bareMetalInventory) InstallCluster(ctx context.Context, params installer.InstallClusterParams) middleware.Responder {
 	c, err := b.InstallClusterInternal(ctx, params)
 	if err != nil {
+		b.log.Errorf("Failed to install cluster %s with error %v", params.ClusterID, err)
 		return common.GenerateErrorResponder(err)
 	}
 	return installer.NewInstallClusterAccepted().WithPayload(&c.Cluster)
@@ -1432,12 +1433,14 @@ func (b *bareMetalInventory) InstallClusterInternal(ctx context.Context, params 
 		}()
 
 		if err = b.generateClusterInstallConfig(asyncCtx, cluster); err != nil {
+			log.Errorf("generateClusterInstallConfig failed for cluster %s with error %v", cluster.ID.String(), err)
 			return
 		}
 		log.Infof("generated ignition for cluster %s", cluster.ID.String())
 
 		log.Infof("Storing OpenShift cluster ID of cluster %s to DB", cluster.ID.String())
 		if err = b.storeOpenshiftClusterID(ctx, cluster.ID.String()); err != nil {
+			log.Errorf("Storing OpenShift cluster ID failed for cluster %s with error %v", cluster.ID.String(), err)
 			return
 		}
 
@@ -1448,6 +1451,7 @@ func (b *bareMetalInventory) InstallClusterInternal(ctx context.Context, params 
 			params: params,
 		}
 		if err = b.db.Transaction(cInstaller.install); err != nil {
+			log.Errorf("Transaction on install failed for cluster %s with error %v", cluster.ID.String(), err)
 			return
 		}
 
