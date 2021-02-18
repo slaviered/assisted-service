@@ -111,10 +111,14 @@ func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwit
 	// SARAH - Does it need to be in the same transaction as the update transition
 	sCluster.cluster, err = updateLogsProgress(logutil.FromContext(params.ctx, th.log), th.db, *sCluster.cluster.ID, sCluster.srcState, "")
 	if err != nil {
+		th.log.Infof("SARAH DEBUG => update progress PostPrepareForInstallation failed %v", err)
 		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
 	}
-	return th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), th.db, sCluster,
+	//SARAH DEBUG
+	err = th.updateTransitionCluster(logutil.FromContext(params.ctx, th.log), th.db, sCluster,
 		statusInfoPreparingForInstallation, "install_started_at", strfmt.DateTime(time.Now()))
+	th.log.Infof("SARAH DEBUG => update transition in PostPrepareForInstallation %v", err)
+	return err
 }
 
 func sendNTPMetric(log logrus.FieldLogger, metricApi metrics.API, cluster *common.Cluster) {
@@ -159,16 +163,19 @@ type TransitionArgsUpdateLogsProgress struct {
 
 func (th *transitionHandler) PostUpdateLogsProgress(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
 	sCluster, ok := sw.(*stateCluster)
-
+	th.log.Info("SARAH DEBUG => Enter PostUpdateLogsProgress on Cluster")
 	if !ok {
+		th.log.Error("SARAH DEBUG => PostUpdateLogsProgress incompatible type of StateSwitch")
 		return errors.New("PostUpdateLogsProgress incompatible type of StateSwitch")
 	}
 	params, ok := args.(*TransitionArgsUpdateLogsProgress)
 	if !ok {
+		th.log.Error("SARAH DEBUG => PostUpdateLogsProgress invalid argument")
 		return errors.New("PostUpdateLogsProgress invalid argument")
 	}
 	_, err := updateLogsProgress(logutil.FromContext(params.ctx, th.log), th.db, *sCluster.cluster.ID, swag.StringValue(sCluster.cluster.Status),
 		params.progress)
+	th.log.Errorf("SARAH DEBUG => Exit PostUpdateLogsProgress on Cluster err=%v", err)
 	return err
 }
 
@@ -251,9 +258,9 @@ func (th *transitionHandler) PostHandlePreInstallationError(sw stateswitch.State
 
 func (th *transitionHandler) updateTransitionCluster(log logrus.FieldLogger, db *gorm.DB, state *stateCluster,
 	statusInfo string, extra ...interface{}) error {
-
 	if cluster, err := updateClusterStatus(log, db, *state.cluster.ID, state.srcState,
 		swag.StringValue(state.cluster.Status), statusInfo, extra...); err != nil {
+		th.log.Errorf("SARAH DEBUG => failed updateClusterStatus %v", err)
 		return err
 	} else {
 		state.cluster = cluster
@@ -434,31 +441,37 @@ func (th *transitionHandler) PostRefreshLogsProgress(progress string) stateswitc
 func (th *transitionHandler) IsLogCollectionTimedOut(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) (bool, error) {
 	sCluster, ok := sw.(*stateCluster)
 	if !ok {
-		return false, errors.New("IsLogCollectionTimedOut incompatible type of StateSwitch")
+		th.log.Error("IsLogCollectionTimedOut incompatible type of StateSwitch")
+		return false, errors.New("Cluster IsLogCollectionTimedOut incompatible type of StateSwitch")
 	}
 
 	// if we are already in timeout, return true
 	if sCluster.cluster.LogsInfo == string(models.LogsStateTimeout) {
+		th.log.Info("SARAH DEBUG => Cluster IsLogCollectionTimedOut: already in timeout")
 		return true, nil
 	}
 	// if we transitioned to the state before the logs were collected, check the timeout
 	// from the time the state machine entered the state
 	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) && time.Time(sCluster.cluster.ControllerLogsStartedAt).IsZero() {
+		th.log.Info("SARAH DEBUG => Cluster IsLogCollectionTimedOut: check before log collected: %s", time.Since(time.Time(sCluster.cluster.StatusUpdatedAt)))
 		return time.Since(time.Time(sCluster.cluster.StatusUpdatedAt)) > th.prepareConfig.LogPendingTimeout, nil
 	}
 
 	// if logs started to be collected, but not finished yet, check the timeout
 	// from the the time the logs were expected
 	if sCluster.cluster.LogsInfo == string(models.LogsStateRequested) && time.Time(sCluster.cluster.ControllerLogsCollectedAt).IsZero() {
+		th.log.Info("SARAH DEBUG => Cluster IsLogCollectionTimedOut: check after log collected before complete: %s", time.Since(time.Time(sCluster.cluster.ControllerLogsStartedAt)))
 		return time.Since(time.Time(sCluster.cluster.ControllerLogsStartedAt)) > th.prepareConfig.LogCollectionTimeout, nil
 	}
 
 	// if logs are uploaded but not completed or re-requested (e.g. controller was crashed mid action)
 	// check the timeout from the last time the log were collected
 	if sCluster.cluster.LogsInfo == string(models.LogsStateCollecting) {
+		th.log.Info("SARAH DEBUG => Cluster IsLogCollectionTimedOut: check after upload before complete: %s", time.Since(time.Time(sCluster.cluster.ControllerLogsCollectedAt)))
 		return time.Since(time.Time(sCluster.cluster.ControllerLogsCollectedAt)) > th.prepareConfig.LogPendingTimeout, nil
 	}
 
+	th.log.Info("SARAH DEBUG => Cluster IsLogCollectionTimedOut: nothing to check")
 	return false, nil
 }
 

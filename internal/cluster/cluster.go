@@ -297,6 +297,7 @@ func (m *Manager) shouldTriggerLeaseTimeoutEvent(c *common.Cluster, curMonitorIn
 	//SARAH - to be reviewed by michael
 	notAllowedStates := []string{models.ClusterStatusInstalled, models.ClusterStatusError}
 	if funk.Contains(notAllowedStates, *c.Status) {
+		m.log.Info("SARAH DEBUG => block call to shouldTriggerLeaseTimeoutEvent on error and installed states")
 		return false
 	}
 	//
@@ -312,8 +313,12 @@ func (m *Manager) triggerLeaseTimeoutEvent(ctx context.Context, c *common.Cluste
 
 func (m *Manager) StopMonitoring(c *common.Cluster) bool {
 	stopMonitoringStates := []string{string(models.LogsStateCompleted), string(models.LogsStateTimeout), ""}
-	return (swag.StringValue(c.Status) == models.ClusterStatusError &&
+	result := (swag.StringValue(c.Status) == models.ClusterStatusError &&
 		funk.Contains(stopMonitoringStates, c.LogsInfo))
+	if result {
+		m.log.Info("SARAH DEBUG => Stop Monitoring")
+	}
+	return result
 }
 
 func (m *Manager) ClusterMonitoring() {
@@ -471,10 +476,12 @@ func (m *Manager) CancelInstallation(ctx context.Context, c *common.Cluster, rea
 
 func (m *Manager) UpdateLogsProgress(ctx context.Context, c *common.Cluster, progress string) error {
 	//SARAH TODO - where to emit event and metrics?
+	m.log.Info("SARAH DEBUG => Enter UpdateLogsProgress")
 	err := m.sm.Run(TransitionTypeUpdateLogsProgress, newStateCluster(c), &TransitionArgsUpdateLogsProgress{
 		ctx:      ctx,
 		progress: progress,
 	})
+	m.log.Infof("SARAH DEBUG => Exit UpdateLogsProgress err=%v", err)
 	return err
 }
 

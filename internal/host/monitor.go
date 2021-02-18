@@ -11,8 +11,12 @@ import (
 
 func (m *Manager) StopMonitoring(h *models.Host) bool {
 	stopMonitoringStates := []string{string(models.LogsStateCompleted), string(models.LogsStateTimeout), ""}
-	return ((swag.StringValue(h.Status) == models.HostStatusError || swag.StringValue(h.Status) == models.HostStatusCancelled) &&
+	result := ((swag.StringValue(h.Status) == models.HostStatusError || swag.StringValue(h.Status) == models.HostStatusCancelled) &&
 		funk.Contains(stopMonitoringStates, h.LogsInfo))
+	if result {
+		m.log.Info("SARAH DEBUG => Host StopMonitoring")
+	}
+	return result
 }
 
 func (m *Manager) HostMonitoring() {

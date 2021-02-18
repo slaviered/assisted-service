@@ -43,6 +43,7 @@ func UpdateLogsProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB
 	}
 
 	if host, err = UpdateHost(log, db, clusterId, hostId, srcStatus, extra...); err != nil {
+		log.Error("SARAH DEBUG => Host UpdateLogsProgress failed %v", err)
 		return nil, err
 	}
 	log.Infof("host %s has been updated with the following log progress %+v", hostId, extra)

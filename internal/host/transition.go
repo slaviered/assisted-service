@@ -367,10 +367,14 @@ func (th *transitionHandler) PostPrepareForInstallation(sw stateswitch.StateSwit
 	// SARAH - Does it need to be in the same transaction as the update transition
 	sHost.host, err = hostutil.UpdateLogsProgress(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, th.eventsHandler, sHost.host.ClusterID, *sHost.host.ID, sHost.srcState, "")
 	if err != nil {
+		th.log.Info("SARAH DEBUG => failed PostPrepareForInstallation failed to clean log progress and timestamps %v", err)
 		return errors.Wrap(err, "PostPrepareForInstallation failed to clean log progress and timestamps")
 	}
-	return th.updateTransitionHost(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, sHost,
+	//SARAH DEBUG
+	err = th.updateTransitionHost(params.ctx, logutil.FromContext(params.ctx, th.log), params.db, sHost,
 		statusInfoPreparingForInstallation, "logs_collected_at", strfmt.DateTime(time.Time{}))
+	th.log.Info("SARAH DEBUG => updateTransitionHost to statusInfoPreparingForInstallation %v", err)
+	return err
 }
 
 func (th *transitionHandler) updateTransitionHost(ctx context.Context, log logrus.FieldLogger, db *gorm.DB, state *stateHost,
@@ -450,14 +454,17 @@ func (th *transitionHandler) PostRefreshLogsProgress(progress string) stateswitc
 	ret := func(sw stateswitch.StateSwitch, args stateswitch.TransitionArgs) error {
 		sHost, ok := sw.(*stateHost)
 		if !ok {
-			return errors.New("PostRefreshLogsProgress incompatible type of StateSwitch")
+			th.log.Error("SARAH DEBUG => PostRefreshLogsProgress incompatible type of StateSwitch")
+			return errors.New("Host PostRefreshLogsProgress incompatible type of StateSwitch")
 		}
 		params, ok := args.(*TransitionArgsRefreshHost)
 		if !ok {
-			return errors.New("PostRefreshLogsProgress invalid argument")
+			th.log.Error("SARAH DEBUG => PostRefreshLogsProgress invalid argument")
+			return errors.New("Host PostRefreshLogsProgress invalid argument")
 		}
 		_, err := hostutil.UpdateLogsProgress(params.ctx, logutil.FromContext(params.ctx, th.log),
 			params.db, th.eventsHandler, sHost.host.ClusterID, *sHost.host.ID, sHost.srcState, progress)
+		th.log.Error("Host PostRefreshLogsProgress: UpdateLogsProgressfailed %v", err)
 		return err
 	}
 	return ret
