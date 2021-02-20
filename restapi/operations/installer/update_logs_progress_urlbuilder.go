@@ -14,12 +14,13 @@ import (
 	"github.com/go-openapi/strfmt"
 )
 
-// UploadLogsURL generates an URL for the upload logs operation
-type UploadLogsURL struct {
+// UpdateLogsProgressURL generates an URL for the update logs progress operation
+type UpdateLogsProgressURL struct {
 	ClusterID strfmt.UUID
 
-	HostID   *strfmt.UUID
-	LogsType string
+	HostID    *strfmt.UUID
+	LogsState string
+	LogsType  string
 
 	_basePath string
 	// avoid unkeyed usage
@@ -29,7 +30,7 @@ type UploadLogsURL struct {
 // WithBasePath sets the base path for this url builder, only required when it's different from the
 // base path specified in the swagger spec.
 // When the value of the base path is an empty string
-func (o *UploadLogsURL) WithBasePath(bp string) *UploadLogsURL {
+func (o *UpdateLogsProgressURL) WithBasePath(bp string) *UpdateLogsProgressURL {
 	o.SetBasePath(bp)
 	return o
 }
@@ -37,21 +38,21 @@ func (o *UploadLogsURL) WithBasePath(bp string) *UploadLogsURL {
 // SetBasePath sets the base path for this url builder, only required when it's different from the
 // base path specified in the swagger spec.
 // When the value of the base path is an empty string
-func (o *UploadLogsURL) SetBasePath(bp string) {
+func (o *UpdateLogsProgressURL) SetBasePath(bp string) {
 	o._basePath = bp
 }
 
 // Build a url path and query string
-func (o *UploadLogsURL) Build() (*url.URL, error) {
+func (o *UpdateLogsProgressURL) Build() (*url.URL, error) {
 	var _result url.URL
 
-	var _path = "/clusters/{cluster_id}/logs"
+	var _path = "/clusters/{cluster_id}/logs_progress"
 
 	clusterID := o.ClusterID.String()
 	if clusterID != "" {
 		_path = strings.Replace(_path, "{cluster_id}", clusterID, -1)
 	} else {
-		return nil, errors.New("clusterId is required on UploadLogsURL")
+		return nil, errors.New("clusterId is required on UpdateLogsProgressURL")
 	}
 
 	_basePath := o._basePath
@@ -70,6 +71,11 @@ func (o *UploadLogsURL) Build() (*url.URL, error) {
 		qs.Set("host_id", hostIDQ)
 	}
 
+	logsStateQ := o.LogsState
+	if logsStateQ != "" {
+		qs.Set("logs_state", logsStateQ)
+	}
+
 	logsTypeQ := o.LogsType
 	if logsTypeQ != "" {
 		qs.Set("logs_type", logsTypeQ)
@@ -81,7 +87,7 @@ func (o *UploadLogsURL) Build() (*url.URL, error) {
 }
 
 // Must is a helper function to panic when the url builder returns an error
-func (o *UploadLogsURL) Must(u *url.URL, err error) *url.URL {
+func (o *UpdateLogsProgressURL) Must(u *url.URL, err error) *url.URL {
 	if err != nil {
 		panic(err)
 	}
@@ -92,17 +98,17 @@ func (o *UploadLogsURL) Must(u *url.URL, err error) *url.URL {
 }
 
 // String returns the string representation of the path with query string
-func (o *UploadLogsURL) String() string {
+func (o *UpdateLogsProgressURL) String() string {
 	return o.Must(o.Build()).String()
 }
 
 // BuildFull builds a full url with scheme, host, path and query string
-func (o *UploadLogsURL) BuildFull(scheme, host string) (*url.URL, error) {
+func (o *UpdateLogsProgressURL) BuildFull(scheme, host string) (*url.URL, error) {
 	if scheme == "" {
-		return nil, errors.New("scheme is required for a full url on UploadLogsURL")
+		return nil, errors.New("scheme is required for a full url on UpdateLogsProgressURL")
 	}
 	if host == "" {
-		return nil, errors.New("host is required for a full url on UploadLogsURL")
+		return nil, errors.New("host is required for a full url on UpdateLogsProgressURL")
 	}
 
 	base, err := o.Build()
@@ -116,6 +122,6 @@ func (o *UploadLogsURL) BuildFull(scheme, host string) (*url.URL, error) {
 }
 
 // StringFull returns the string representation of a complete url
-func (o *UploadLogsURL) StringFull(scheme, host string) string {
+func (o *UpdateLogsProgressURL) StringFull(scheme, host string) string {
 	return o.Must(o.BuildFull(scheme, host)).String()
 }

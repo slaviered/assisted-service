@@ -111,6 +111,19 @@ func getNextSteps(clusterID, hostID strfmt.UUID) models.Steps {
 	return *steps.GetPayload()
 }
 
+func updateLogProgress(clusterID strfmt.UUID, hostID *strfmt.UUID, logsType string, progress string) {
+	ctx := context.Background()
+
+	updateReply, err := agentBMClient.Installer.UpdateLogsProgress(ctx, &installer.UpdateLogsProgressParams{
+		ClusterID: clusterID,
+		HostID:    hostID,
+		LogsType:  logsType,
+		LogsState: progress,
+	})
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(updateReply).Should(BeAssignableToTypeOf(installer.NewUpdateLogsProgressNoContent()))
+}
+
 func updateProgress(hostID strfmt.UUID, clusterID strfmt.UUID, current_step models.HostStage) {
 	updateProgressWithInfo(hostID, clusterID, current_step, "")
 }

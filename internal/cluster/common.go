@@ -90,10 +90,14 @@ func updateLogsProgress(log logrus.FieldLogger, db *gorm.DB, clusterId strfmt.UU
 	var cluster *common.Cluster
 	var err error
 
+	log.Infof("SARAH DEBUG => update log prgress on cluster %s to progress %s", clusterId, progress)
+
 	switch progress {
 	case string(models.LogsStateRequested):
 		extra = append(append(append(make([]interface{}, 0), "logs_info", progress),
-			"logs_started_at", strfmt.DateTime(time.Now())), extra...)
+			"controller_logs_started_at", strfmt.DateTime(time.Now())), extra...)
+	default:
+		extra = append(append(make([]interface{}, 0), "logs_info", progress), extra...)
 	}
 
 	if cluster, err = UpdateCluster(log, db, clusterId, srcStatus, extra...); err != nil {

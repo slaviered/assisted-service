@@ -3490,17 +3490,6 @@ func init() {
             "description": "The host whose logs should be uploaded.",
             "name": "host_id",
             "in": "query"
-          },
-          {
-            "enum": [
-              "requested",
-              "collecting",
-              "completed"
-            ],
-            "type": "string",
-            "description": "The state of collecting logs.",
-            "name": "logs_state",
-            "in": "query"
           }
         ],
         "responses": {
@@ -3520,6 +3509,107 @@ func init() {
             }
           },
           "404": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "500": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "503": {
+            "description": "Unavailable.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{cluster_id}/logs_progress": {
+      "put": {
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "description": "Update log collection state and progress.",
+        "tags": [
+          "installer"
+        ],
+        "operationId": "UpdateLogsProgress",
+        "parameters": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "description": "The cluster whose log progress is being updated.",
+            "name": "cluster_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "enum": [
+              "host",
+              "controller"
+            ],
+            "type": "string",
+            "description": "The type of log file.",
+            "name": "logs_type",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "format": "uuid",
+            "description": "The host whose log progress is being updated.",
+            "name": "host_id",
+            "in": "query"
+          },
+          {
+            "enum": [
+              "requested",
+              "collecting",
+              "completed"
+            ],
+            "type": "string",
+            "description": "The state of collecting logs.",
+            "name": "logs_state",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Update cluster install progress."
+          },
+          "401": {
+            "description": "Unauthorized.",
+            "schema": {
+              "$ref": "#/definitions/infra_error"
+            }
+          },
+          "403": {
+            "description": "Forbidden.",
+            "schema": {
+              "$ref": "#/definitions/infra_error"
+            }
+          },
+          "404": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "409": {
             "description": "Error.",
             "schema": {
               "$ref": "#/definitions/error"
@@ -10056,17 +10146,6 @@ func init() {
             "description": "The host whose logs should be uploaded.",
             "name": "host_id",
             "in": "query"
-          },
-          {
-            "enum": [
-              "requested",
-              "collecting",
-              "completed"
-            ],
-            "type": "string",
-            "description": "The state of collecting logs.",
-            "name": "logs_state",
-            "in": "query"
           }
         ],
         "responses": {
@@ -10086,6 +10165,107 @@ func init() {
             }
           },
           "404": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "500": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "503": {
+            "description": "Unavailable.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{cluster_id}/logs_progress": {
+      "put": {
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "description": "Update log collection state and progress.",
+        "tags": [
+          "installer"
+        ],
+        "operationId": "UpdateLogsProgress",
+        "parameters": [
+          {
+            "type": "string",
+            "format": "uuid",
+            "description": "The cluster whose log progress is being updated.",
+            "name": "cluster_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "enum": [
+              "host",
+              "controller"
+            ],
+            "type": "string",
+            "description": "The type of log file.",
+            "name": "logs_type",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "format": "uuid",
+            "description": "The host whose log progress is being updated.",
+            "name": "host_id",
+            "in": "query"
+          },
+          {
+            "enum": [
+              "requested",
+              "collecting",
+              "completed"
+            ],
+            "type": "string",
+            "description": "The state of collecting logs.",
+            "name": "logs_state",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Update cluster install progress."
+          },
+          "401": {
+            "description": "Unauthorized.",
+            "schema": {
+              "$ref": "#/definitions/infra_error"
+            }
+          },
+          "403": {
+            "description": "Forbidden.",
+            "schema": {
+              "$ref": "#/definitions/infra_error"
+            }
+          },
+          "404": {
+            "description": "Error.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed.",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          },
+          "409": {
             "description": "Error.",
             "schema": {
               "$ref": "#/definitions/error"

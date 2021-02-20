@@ -1616,39 +1616,35 @@ var _ = Describe("update logs_info", func() {
 		common.DeleteTestDB(db, dbName)
 	})
 
-	validateLogsStartedAt := func() {
-		Expect(host.LogsStartedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
+	validateLogsStartedAt := func(h *models.Host) {
+		Expect(h.LogsStartedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
 	}
 
-	validateLogsCollectedAt := func() {
-		Expect(host.LogsCollectedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
-	}
+	// validateLogsCollectedAt := func(h *models.Host) {
+	// 	Expect(h.LogsCollectedAt).NotTo(Equal(strfmt.DateTime(time.Time{})))
+	// }
 
-	validateCollectedAtNotUpdated := func() {
-		Expect(host.LogsCollectedAt).To(Equal(strfmt.DateTime(time.Time{})))
+	validateCollectedAtNotUpdated := func(h *models.Host) {
+		Expect(h.LogsCollectedAt).To(Equal(strfmt.DateTime(time.Time{})))
 	}
 
 	tests := []struct {
 		name              string
-		logstate          models.LogsState
 		logsInfo          string
-		validateTimestamp func()
+		validateTimestamp func(h *models.Host)
 	}{
 		{
 			name:              "log collection started",
-			logstate:          models.LogsStateRequested,
 			logsInfo:          string(models.LogsStateRequested),
 			validateTimestamp: validateLogsStartedAt,
 		},
 		{
 			name:              "log collecting",
-			logstate:          models.LogsStateCollecting,
 			logsInfo:          string(models.LogsStateCollecting),
-			validateTimestamp: validateLogsCollectedAt,
+			validateTimestamp: validateCollectedAtNotUpdated, //SARAH TODO: update time stamp through log progress
 		},
 		{
 			name:              "log collecting completed",
-			logstate:          models.LogsStateCompleted,
 			logsInfo:          string(models.LogsStateCompleted),
 			validateTimestamp: validateCollectedAtNotUpdated,
 		},
@@ -1657,11 +1653,11 @@ var _ = Describe("update logs_info", func() {
 	for i := range tests {
 		t := tests[i]
 		It(t.name, func() {
-			err := hapi.SetUploadLogsAt(ctx, &host, db)
+			err := hapi.UpdateLogsProgress(ctx, &host, t.logsInfo)
 			Expect(err).ShouldNot(HaveOccurred())
 			h := hostutil.GetHostFromDB(hostId, clusterId, db)
 			Expect(h.LogsInfo).To(Equal(t.logsInfo))
-			t.validateTimestamp()
+			t.validateTimestamp(h)
 		})
 	}
 })
