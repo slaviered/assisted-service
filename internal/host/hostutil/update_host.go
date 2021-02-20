@@ -41,6 +41,8 @@ func UpdateLogsProgress(ctx context.Context, log logrus.FieldLogger, db *gorm.DB
 	case string(models.LogsStateRequested):
 		extra = append(append(append(make([]interface{}, 0), "logs_info", progress),
 			"logs_started_at", strfmt.DateTime(time.Now())), extra...)
+	default:
+		extra = append(append(make([]interface{}, 0), "logs_info", progress), extra...)
 	}
 
 	if host, err = UpdateHost(log, db, clusterId, hostId, srcStatus, extra...); err != nil {

@@ -2273,6 +2273,70 @@ paths:
           schema:
             $ref: '#/definitions/error'
 
+  /clusters/{cluster_id}/logs_progress:
+    put:
+      tags:
+        - installer
+      security:
+        - agentAuth: []
+      description: Update log collection state and progress.
+      operationId: UpdateLogsProgress
+      parameters:
+        - in: path
+          name: cluster_id
+          description: The cluster whose log progress is being updated.
+          type: string
+          format: uuid
+          required: true
+        - in: query
+          name: logs_type
+          description: The type of log file.
+          type: string
+          enum: ['host', 'controller']
+          required: true
+        - in: query
+          name: host_id
+          description: The host whose log progress is being updated.
+          type: string
+          format: uuid
+          required: false
+        - in: query
+          name: logs_state
+          description: The state of collecting logs.
+          type: string
+          enum: ['requested', 'collecting', 'completed']
+          required: true
+      responses:
+        "204":
+          description: Update cluster install progress.
+        "401":
+          description: Unauthorized.
+          schema:
+            $ref: '#/definitions/infra_error'
+        "403":
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/infra_error'
+        "404":
+          description: Error.
+          schema:
+            $ref: '#/definitions/error'
+        "405":
+          description: Method Not Allowed.
+          schema:
+            $ref: '#/definitions/error'
+        "409":
+          description: Error.
+          schema:
+            $ref: '#/definitions/error'
+        "500":
+          description: Error.
+          schema:
+            $ref: '#/definitions/error'
+        "503":
+          description: Unavailable.
+          schema:
+            $ref: '#/definitions/error'
 
   /clusters/{cluster_id}/logs:
     post:
@@ -2309,12 +2373,6 @@ paths:
           description: The host whose logs should be uploaded.
           type: string
           format: uuid
-          required: false
-        - in: query
-          name: logs_state
-          description: The state of collecting logs.
-          type: string
-          enum: ['requested', 'collecting', 'completed']
           required: false
       responses:
         "204":

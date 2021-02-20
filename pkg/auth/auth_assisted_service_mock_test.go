@@ -191,6 +191,10 @@ func (f fakeInventory) UploadLogs(ctx context.Context, params installer.UploadLo
 	return installer.NewUploadLogsNoContent()
 }
 
+func (f fakeInventory) UpdateLogsProgress(ctx context.Context, params installer.UpdateLogsProgressParams) middleware.Responder {
+	return installer.NewUpdateLogsProgressNoContent()
+}
+
 func (f fakeInventory) DownloadHostLogs(ctx context.Context, params installer.DownloadHostLogsParams) middleware.Responder {
 	file, err := ioutil.TempFile("/tmp", "test.file")
 	if err != nil {

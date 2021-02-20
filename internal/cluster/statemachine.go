@@ -285,6 +285,7 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 
 	// states relevant for log collection
 	for _, state := range []stateswitch.State{
+		stateswitch.State(models.ClusterStatusInstalled), //controller logs are uploaded even after the state machine finishes
 		stateswitch.State(models.ClusterStatusInstalling),
 		stateswitch.State(models.ClusterStatusFinalizing),
 		stateswitch.State(models.ClusterStatusInstallingPendingUserAction),
@@ -316,7 +317,8 @@ func NewClusterStateMachine(th *transitionHandler) stateswitch.StateMachine {
 		stateswitch.State(models.ClusterStatusPreparingForInstallation),
 		stateswitch.State(models.ClusterStatusFinalizing),
 		stateswitch.State(models.ClusterStatusInstalled),
-		//stateswitch.State(models.ClusterStatusError), //SARAH
+		stateswitch.State(models.ClusterStatusError),
+		stateswitch.State(models.ClusterStatusCancelled),
 		stateswitch.State(models.ClusterStatusAddingHosts)} {
 		sm.AddTransition(stateswitch.TransitionRule{
 			TransitionType:   TransitionTypeRefreshStatus,

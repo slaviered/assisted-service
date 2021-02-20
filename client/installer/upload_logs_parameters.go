@@ -70,11 +70,6 @@ type UploadLogsParams struct {
 
 	*/
 	HostID *strfmt.UUID
-	/*LogsState
-	  The state of collecting logs.
-
-	*/
-	LogsState *string
 	/*LogsType
 	  The type of log file to be uploaded.
 
@@ -146,17 +141,6 @@ func (o *UploadLogsParams) SetHostID(hostID *strfmt.UUID) {
 	o.HostID = hostID
 }
 
-// WithLogsState adds the logsState to the upload logs params
-func (o *UploadLogsParams) WithLogsState(logsState *string) *UploadLogsParams {
-	o.SetLogsState(logsState)
-	return o
-}
-
-// SetLogsState adds the logsState to the upload logs params
-func (o *UploadLogsParams) SetLogsState(logsState *string) {
-	o.LogsState = logsState
-}
-
 // WithLogsType adds the logsType to the upload logs params
 func (o *UploadLogsParams) WithLogsType(logsType string) *UploadLogsParams {
 	o.SetLogsType(logsType)
@@ -202,22 +186,6 @@ func (o *UploadLogsParams) WriteToRequest(r runtime.ClientRequest, reg strfmt.Re
 		qHostID := qrHostID.String()
 		if qHostID != "" {
 			if err := r.SetQueryParam("host_id", qHostID); err != nil {
-				return err
-			}
-		}
-
-	}
-
-	if o.LogsState != nil {
-
-		// query param logs_state
-		var qrLogsState string
-		if o.LogsState != nil {
-			qrLogsState = *o.LogsState
-		}
-		qLogsState := qrLogsState
-		if qLogsState != "" {
-			if err := r.SetQueryParam("logs_state", qLogsState); err != nil {
 				return err
 			}
 		}

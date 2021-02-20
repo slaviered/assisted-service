@@ -886,7 +886,7 @@ var _ = Describe("Refresh Cluster - No DHCP", func() {
 				},
 				statusInfoChecker:  makeValueChecker(""),
 				validationsChecker: nil,
-				errorExpected:      true, //support additional transition of log timeout
+				errorExpected:      false,
 			},
 			{
 				name:               "installed to installed",
@@ -2204,7 +2204,7 @@ var _ = Describe("Refresh Cluster - With DHCP", func() {
 				},
 				statusInfoChecker:  makeValueChecker(""),
 				validationsChecker: nil,
-				errorExpected:      true, //support additional transition of log timeout
+				errorExpected:      false,
 			},
 			{
 				name:               "installed to installed",
@@ -2610,7 +2610,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 		ControllerLogsStartedAt   strfmt.DateTime
 		srclogsInfo               string
 		dstlogsInfo               string
-		errorExpected             bool
 		srcState                  string
 		srcStatusInfo             string
 	)
@@ -2645,7 +2644,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 		BeforeEach(func() {
 			srcState = models.ClusterStatusError
 			srcStatusInfo = statusInfoError
-			errorExpected = false
 		})
 
 		It("logs not requested when cluster enter error -> noop", func() {
@@ -2654,7 +2652,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 			StatusUpdatedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
 			ControllerLogsCollectedAt = strfmt.DateTime(time.Time{})
 			ControllerLogsStartedAt = strfmt.DateTime(time.Time{})
-			errorExpected = true
 		})
 
 		It("logs requested when cluster enter error -> timeout", func() {
@@ -2671,7 +2668,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 			StatusUpdatedAt = strfmt.DateTime(time.Now())
 			ControllerLogsCollectedAt = strfmt.DateTime(time.Time{})
 			ControllerLogsStartedAt = strfmt.DateTime(time.Now())
-			errorExpected = true
 		})
 
 		It("logs collected in the past but not completed -> timeout", func() {
@@ -2688,7 +2684,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 			StatusUpdatedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
 			ControllerLogsCollectedAt = strfmt.DateTime(time.Now().Add(-3 * time.Second))
 			ControllerLogsStartedAt = strfmt.DateTime(time.Now())
-			errorExpected = true
 		})
 
 		It("logs completed -> no timeout", func() {
@@ -2697,7 +2692,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 			StatusUpdatedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
 			ControllerLogsCollectedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
 			ControllerLogsStartedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
-			errorExpected = true
 		})
 	})
 
@@ -2706,7 +2700,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 		BeforeEach(func() {
 			srcState = models.ClusterStatusCancelled
 			srcStatusInfo = "cancelled"
-			errorExpected = false
 		})
 
 		It("logs not requested when cluster enter cancel -> noop", func() {
@@ -2715,7 +2708,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 			StatusUpdatedAt = strfmt.DateTime(time.Now().Add(-2 * time.Second))
 			ControllerLogsCollectedAt = strfmt.DateTime(time.Time{})
 			ControllerLogsStartedAt = strfmt.DateTime(time.Time{})
-			errorExpected = true
 		})
 
 		It("logs requested when cluster enter cancel -> timeout", func() {
@@ -2741,10 +2733,6 @@ var _ = Describe("Log Collection - refresh cluster", func() {
 		Expect(db.Create(&cluster).Error).ShouldNot(HaveOccurred())
 		cluster = getCluster(clusterId, db)
 		clusterAfterRefresh, err := clusterApi.RefreshStatus(ctx, &cluster, db)
-		if errorExpected {
-			Expect(err).To(HaveOccurred())
-			return
-		}
 		Expect(err).ToNot(HaveOccurred())
 		verifyStatusNotChanged(clusterAfterRefresh, srcState, srcStatusInfo)
 		Expect(clusterAfterRefresh.LogsInfo).To(Equal(dstlogsInfo))

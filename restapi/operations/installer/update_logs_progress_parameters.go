@@ -6,8 +6,6 @@ package installer
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"io"
-	"mime/multipart"
 	"net/http"
 
 	"github.com/go-openapi/errors"
@@ -17,61 +15,53 @@ import (
 	"github.com/go-openapi/validate"
 )
 
-// NewUploadLogsParams creates a new UploadLogsParams object
+// NewUpdateLogsProgressParams creates a new UpdateLogsProgressParams object
 // no default values defined in spec.
-func NewUploadLogsParams() UploadLogsParams {
+func NewUpdateLogsProgressParams() UpdateLogsProgressParams {
 
-	return UploadLogsParams{}
+	return UpdateLogsProgressParams{}
 }
 
-// UploadLogsParams contains all the bound params for the upload logs operation
+// UpdateLogsProgressParams contains all the bound params for the update logs progress operation
 // typically these are obtained from a http.Request
 //
-// swagger:parameters UploadLogs
-type UploadLogsParams struct {
+// swagger:parameters UpdateLogsProgress
+type UpdateLogsProgressParams struct {
 
 	// HTTP Request Object
 	HTTPRequest *http.Request `json:"-"`
 
-	/*The cluster whose logs should be uploaded.
+	/*The cluster whose log progress is being updated.
 	  Required: true
 	  In: path
 	*/
 	ClusterID strfmt.UUID
-	/*The host whose logs should be uploaded.
+	/*The host whose log progress is being updated.
 	  In: query
 	*/
 	HostID *strfmt.UUID
-	/*The type of log file to be uploaded.
+	/*The state of collecting logs.
+	  Required: true
+	  In: query
+	*/
+	LogsState string
+	/*The type of log file.
 	  Required: true
 	  In: query
 	*/
 	LogsType string
-	/*The log file to be uploaded.
-	  Max Length: 104857600
-	  In: formData
-	*/
-	Upfile io.ReadCloser
 }
 
 // BindRequest both binds and validates a request, it assumes that complex things implement a Validatable(strfmt.Registry) error interface
 // for simple values it will use straight method calls.
 //
-// To ensure default values, the struct must have been initialized with NewUploadLogsParams() beforehand.
-func (o *UploadLogsParams) BindRequest(r *http.Request, route *middleware.MatchedRoute) error {
+// To ensure default values, the struct must have been initialized with NewUpdateLogsProgressParams() beforehand.
+func (o *UpdateLogsProgressParams) BindRequest(r *http.Request, route *middleware.MatchedRoute) error {
 	var res []error
 
 	o.HTTPRequest = r
 
 	qs := runtime.Values(r.URL.Query())
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		if err != http.ErrNotMultipart {
-			return errors.New(400, "%v", err)
-		} else if err := r.ParseForm(); err != nil {
-			return errors.New(400, "%v", err)
-		}
-	}
 
 	rClusterID, rhkClusterID, _ := route.Params.GetOK("cluster_id")
 	if err := o.bindClusterID(rClusterID, rhkClusterID, route.Formats); err != nil {
@@ -83,20 +73,14 @@ func (o *UploadLogsParams) BindRequest(r *http.Request, route *middleware.Matche
 		res = append(res, err)
 	}
 
-	qLogsType, qhkLogsType, _ := qs.GetOK("logs_type")
-	if err := o.bindLogsType(qLogsType, qhkLogsType, route.Formats); err != nil {
+	qLogsState, qhkLogsState, _ := qs.GetOK("logs_state")
+	if err := o.bindLogsState(qLogsState, qhkLogsState, route.Formats); err != nil {
 		res = append(res, err)
 	}
 
-	upfile, upfileHeader, err := r.FormFile("upfile")
-	if err != nil && err != http.ErrMissingFile {
-		res = append(res, errors.New(400, "reading file %q failed: %v", "upfile", err))
-	} else if err == http.ErrMissingFile {
-		// no-op for missing but optional file parameter
-	} else if err := o.bindUpfile(upfile, upfileHeader); err != nil {
+	qLogsType, qhkLogsType, _ := qs.GetOK("logs_type")
+	if err := o.bindLogsType(qLogsType, qhkLogsType, route.Formats); err != nil {
 		res = append(res, err)
-	} else {
-		o.Upfile = &runtime.File{Data: upfile, Header: upfileHeader}
 	}
 
 	if len(res) > 0 {
@@ -106,7 +90,7 @@ func (o *UploadLogsParams) BindRequest(r *http.Request, route *middleware.Matche
 }
 
 // bindClusterID binds and validates parameter ClusterID from path.
-func (o *UploadLogsParams) bindClusterID(rawData []string, hasKey bool, formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) bindClusterID(rawData []string, hasKey bool, formats strfmt.Registry) error {
 	var raw string
 	if len(rawData) > 0 {
 		raw = rawData[len(rawData)-1]
@@ -130,7 +114,7 @@ func (o *UploadLogsParams) bindClusterID(rawData []string, hasKey bool, formats 
 }
 
 // validateClusterID carries on validations for parameter ClusterID
-func (o *UploadLogsParams) validateClusterID(formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) validateClusterID(formats strfmt.Registry) error {
 
 	if err := validate.FormatOf("cluster_id", "path", "uuid", o.ClusterID.String(), formats); err != nil {
 		return err
@@ -139,7 +123,7 @@ func (o *UploadLogsParams) validateClusterID(formats strfmt.Registry) error {
 }
 
 // bindHostID binds and validates parameter HostID from query.
-func (o *UploadLogsParams) bindHostID(rawData []string, hasKey bool, formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) bindHostID(rawData []string, hasKey bool, formats strfmt.Registry) error {
 	var raw string
 	if len(rawData) > 0 {
 		raw = rawData[len(rawData)-1]
@@ -166,7 +150,7 @@ func (o *UploadLogsParams) bindHostID(rawData []string, hasKey bool, formats str
 }
 
 // validateHostID carries on validations for parameter HostID
-func (o *UploadLogsParams) validateHostID(formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) validateHostID(formats strfmt.Registry) error {
 
 	if err := validate.FormatOf("host_id", "query", "uuid", o.HostID.String(), formats); err != nil {
 		return err
@@ -174,8 +158,43 @@ func (o *UploadLogsParams) validateHostID(formats strfmt.Registry) error {
 	return nil
 }
 
+// bindLogsState binds and validates parameter LogsState from query.
+func (o *UpdateLogsProgressParams) bindLogsState(rawData []string, hasKey bool, formats strfmt.Registry) error {
+	if !hasKey {
+		return errors.Required("logs_state", "query", rawData)
+	}
+	var raw string
+	if len(rawData) > 0 {
+		raw = rawData[len(rawData)-1]
+	}
+
+	// Required: true
+	// AllowEmptyValue: false
+	if err := validate.RequiredString("logs_state", "query", raw); err != nil {
+		return err
+	}
+
+	o.LogsState = raw
+
+	if err := o.validateLogsState(formats); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateLogsState carries on validations for parameter LogsState
+func (o *UpdateLogsProgressParams) validateLogsState(formats strfmt.Registry) error {
+
+	if err := validate.EnumCase("logs_state", "query", o.LogsState, []interface{}{"requested", "collecting", "completed"}, true); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // bindLogsType binds and validates parameter LogsType from query.
-func (o *UploadLogsParams) bindLogsType(rawData []string, hasKey bool, formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) bindLogsType(rawData []string, hasKey bool, formats strfmt.Registry) error {
 	if !hasKey {
 		return errors.Required("logs_type", "query", rawData)
 	}
@@ -200,23 +219,11 @@ func (o *UploadLogsParams) bindLogsType(rawData []string, hasKey bool, formats s
 }
 
 // validateLogsType carries on validations for parameter LogsType
-func (o *UploadLogsParams) validateLogsType(formats strfmt.Registry) error {
+func (o *UpdateLogsProgressParams) validateLogsType(formats strfmt.Registry) error {
 
 	if err := validate.EnumCase("logs_type", "query", o.LogsType, []interface{}{"host", "controller"}, true); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-// bindUpfile binds file parameter Upfile.
-//
-// The only supported validations on files are MinLength and MaxLength
-func (o *UploadLogsParams) bindUpfile(file multipart.File, header *multipart.FileHeader) error {
-	size, _ := file.Seek(0, io.SeekEnd)
-	file.Seek(0, io.SeekStart)
-	if size > 104857600 {
-		return errors.ExceedsMaximum("upfile", "formData", 104857600, false, size)
-	}
 	return nil
 }
