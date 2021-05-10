@@ -5687,6 +5687,7 @@ var _ = Describe("Install Hosts test", func() {
 		body := &bytes.Buffer{}
 		request, _ = http.NewRequest("POST", "test", body)
 		mockSetConnectivityMajorityGroupsForCluster(mockClusterApi)
+		mockUsageReports()
 	})
 
 	AfterEach(func() {
